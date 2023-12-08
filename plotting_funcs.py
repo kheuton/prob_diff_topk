@@ -22,7 +22,7 @@ def plot_hexagon_grid(data, vmin=None, vmax=None, title=None):
     - None (displays the plot).
     """
     # Calculate the size of the hexagon grid
-    size = int(np.sqrt(len(data)))+1
+    size = int(np.ceil(np.sqrt(len(data))))
 
     # Create a hexagon grid
     fig, ax = plt.subplots()
@@ -74,21 +74,47 @@ def plot_hexagon_grid(data, vmin=None, vmax=None, title=None):
     
 
 
-def sample_and_plot(dist_N, size=1000, seed=360, average=False,median=False, index=-1, title=None):
+def sample_and_plot(dist_N, size=1000, seed=360, average=False,median=False, index=-1, title=None, vmin=None, vmax=None):
     random_state = np.random.RandomState(seed)
     # Sample from each distribution
     data = np.array([d.rvs(size=size, random_state=random_state) for d in dist_N])
-    vmin=np.min(data)
-    vmax=np.max(data)
+
+
 
     if average or median:
         if average:
             data = np.mean(data, axis=1)
         else:
             data = np.median(data, axis=1)
-        plot_hexagon_grid(data, title=title)
     else:
+        if vmin is None:
+            vmin=np.min(data)
+        if vmax is None:
+            vmax=np.max(data)
         data = np.array([samples[index] for samples in data])
-        plot_hexagon_grid(data, vmin=vmin, vmax=vmax, title=title)
+    plot_hexagon_grid(data, vmin=vmin, vmax=vmax, title=title)
+
+
+def plot_dist(dist, title=''):
+    # Generate random samples from the custom distribution
+    samples = dist.rvs(size=1000)
+
+    # Calculate mean and median
+    distribution_mean = np.mean(samples)
+    distribution_median = np.median(samples)
+
+    # Plot the histogram of samples
+    plt.hist(samples, bins=50, density=True, alpha=0.5, color='blue', label='Custom Distribution')
+
+    # Display mean and median on the plot
+    plt.axvline(distribution_mean, color='r', linestyle='dashed', linewidth=2, label=f'Mean: {distribution_mean:.2f}')
+    plt.axvline(distribution_median, color='b', linestyle='dashed', linewidth=2, label=f'Median: {distribution_median:.2f}')
+
+
+    plt.title(title)
+    plt.xlabel('Value')
+    plt.ylabel('Probability Density')
+    plt.legend()
+    plt.show()
 
 
