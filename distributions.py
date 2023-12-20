@@ -37,7 +37,8 @@ class MixtureModel(scipy.stats.rv_continuous):
 
     def _rvs(self, size, random_state=None):
         submodel_choices = random_state.choice(len(self.submodels), size=size, p=self.weights)
-        submodel_samples = [submodel.rvs(size=size) for submodel in self.submodels]
+        submodel_samples = [submodel.rvs(size=size, random_state=random_state)
+                             for submodel in self.submodels]
         rvs = np.choose(submodel_choices, submodel_samples)
         return rvs
 
