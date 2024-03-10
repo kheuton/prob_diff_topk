@@ -14,6 +14,19 @@ def poisson_nll(y_true, y_pred):
     """
     return y_pred - y_true * tf.math.log(y_pred + 1e-10)
 
+def mixture_poisson_nll(y_true, y_pred, mixture_weights):
+    """Poisson negative log likelihood loss function.
+    
+    Args:
+        y_true: true values
+        y_pred: predicted values
+    Returns:
+        negative log likelihood
+    """
+    expanded_true = tf.expand_dims(y_pred, axis=-1)
+
+    return y_pred - expanded_true * tf.math.log(expanded_true + 1e-10)
+
 def top_k_idx(input_BD, **kwargs):
     _, idx_BD = tf.math.top_k(input_BD, **kwargs)
     input_depth = input_BD.shape[-1]
@@ -46,7 +59,7 @@ def get_bpr_loss_func(K, num_samples=1000, sigma=1, noise='normal'):
 
     return negative_bpr_K
 
-def uncurried_penalized_bpr(y_true, y_pred, penalty=1.0, 
+def uncurried_penalized_bpr(y_true, y_pred, loss_func=poisson_nll, penalty=1.0, 
                             bpr_threshold=0.40, negative_bpr_K_func=None):
     
     negative_bpr_K_val = negative_bpr_K_func(y_true, y_pred)
@@ -55,14 +68,14 @@ def uncurried_penalized_bpr(y_true, y_pred, penalty=1.0,
                                                 -negative_bpr_K_val),
                                      tf.float32)
     
-    loss = poisson_nll(y_true, y_pred) + penalty * violate_threshold_flag *(bpr_threshold + negative_bpr_K_val)
+    loss = loss_func(y_true, y_pred) + penalty * violate_threshold_flag *(bpr_threshold + negative_bpr_K_val)
 
     return loss
 
-def get_penalized_bpr_loss_func(K, penalty, bpr_threshold,
+def get_penalized_bpr_loss_func(loss_func, K, penalty, bpr_threshold,
                                 num_samples=1000, sigma=1, noise='normal'):
     negative_bpr_K_func = get_bpr_loss_func(K, num_samples, sigma, noise)
-    penalized_bpr = partial(uncurried_penalized_bpr, penalty=penalty, 
+    penalized_bpr = partial(uncurried_penalized_bpr, loss_func=loss_func, penalty=penalty, 
                             bpr_threshold=bpr_threshold, 
                             negative_bpr_K_func=negative_bpr_K_func)
 
