@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import scipy.stats
+import os
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
@@ -10,6 +11,68 @@ from matplotlib.patches import RegularPolygon
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import RegularPolygon
+
+def plot_losses(losses, title_add='', save_dir=None, file_add=''):
+    # plot loss and metrics from history
+    plt.figure()
+    plt.plot(losses['train']['loss'])
+    plt.plot(losses['val']['loss'])
+    plt.title(f'Model loss {title_add}')
+    plt.ylabel('Loss')
+    plt.xlabel('Epoch')
+    plt.legend(['Train', 'Val'], loc='upper left')
+    plt.show()
+    if save_dir is not None:
+        plt.savefig(os.path.join(save_dir, f'loss_{file_add}.png'))
+
+    
+    plt.figure()
+    plt.plot(losses['train']['nll'])
+    plt.plot(losses['val']['nll'])
+    plt.title(f'Model NLL {title_add}')
+    plt.ylabel('NLL')
+    plt.xlabel('Epoch')
+    plt.legend(['Train', 'Val'], loc='upper left')
+    plt.show()
+    if save_dir is not None:
+        plt.savefig(os.path.join(save_dir, f'nll_{file_add}.png'))
+
+    
+    plt.figure()
+    plt.plot(losses['train']['bpr'])
+    plt.plot(losses['val']['bpr'])
+    plt.title(f'Model Negative BPR {title_add}')
+    plt.ylabel('Negative BPR')
+    plt.xlabel('Epoch')
+    plt.legend(['Train', 'Val'], loc='upper left')
+    plt.show()
+    if save_dir is not None:
+        plt.savefig(os.path.join(save_dir, f'bpr_{file_add}.png'))
+
+
+def plot_frontier(losses_nll, losses_bpr, losses_penalized, savedir=None):
+    plt.figure()
+    plt.plot(-np.array(losses_nll['val']['nll'][-1]), -np.array(losses_nll['val']['bpr'][-1]), marker='o', label='NLL')
+    plt.plot(-np.array(losses_bpr['val']['nll'][-1]), -np.array(losses_bpr['val']['bpr'][-1]), marker='o', label='BPR')
+    plt.plot(-np.array(losses_penalized['val']['nll'][-1]), -np.array(losses_penalized['val']['bpr'][-1]), marker='o', label='Penalized')
+    plt.title('Validation Frontier')
+    plt.legend()
+    plt.show()
+    if savedir is not None:
+        plt.savefig(os.path.join(savedir, f'val_frontier.png'))
+
+    plt.figure()
+    plt.plot(-np.array(losses_nll['train']['nll'][-1]), -np.array(losses_nll['train']['bpr'][-1]), marker='o', label='NLL')
+    plt.plot(-np.array(losses_bpr['train']['nll'][-1]), -np.array(losses_bpr['train']['bpr'][-1]), marker='o', label='BPR')
+    plt.plot(-np.array(losses_penalized['train']['nll'][-1]), -np.array(losses_penalized['train']['bpr'][-1]), marker='o', label='Penalized')
+    plt.title('Training Frontier')
+    plt.legend()
+    plt.show()
+    if savedir is not None:
+        plt.savefig(os.path.join(savedir, f'train_frontier.png'))
+
+    return
+
 
 def plot_hexagon_grid(data, vmin=None, vmax=None, title=None):
     """
