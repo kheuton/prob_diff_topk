@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+from distributions import ZeroInflatedDist, QuantizedNormal
 
 def make_data(dist_S, H=50, T=500, seed=360):
     """Generate data from a list of distributions.
@@ -25,6 +26,34 @@ def make_data(dist_S, H=50, T=500, seed=360):
     y_TS = np.array([data_HT_S[H+t, :] for t in range(T)], dtype=np.float32)
 
     return X_THS, y_TS
+
+def example_datasets(H, T, seed=360):
+    consistent_4 = [QuantizedNormal(7, 0.1) for _ in range(4)]
+
+    highvar_4 = [ZeroInflatedDist(QuantizedNormal(10, 0.1), 1-0.7) for _ in range(4)]
+
+    powerball_4 = [ZeroInflatedDist(QuantizedNormal(100, 0.1), 0.9) for _ in range(4)]
+    dist_S = consistent_4 + highvar_4 +powerball_4
+    X_THS, y_TS = make_data(dist_S, H=H, T=T, seed=seed)
+
+    # check that each final history is equal to the previous observation
+    for t in range(H, T):
+        assert(np.all(X_THS[t, H-1, :] == y_TS[t-1, :]))
+
+    # check random point in history
+    for t in range(H, T):
+        h = np.random.randint(0, H)
+        assert(np.all(X_THS[t, h, :] == y_TS[t-(H-h), :]))
+
+    (train_X_THS, train_y_TS), \
+    (val_X_THS, val_y_TS), \
+    (test_X_THS, test_y_TS) = train_val_test_split(X_THS, y_TS, train_pct=0.6, test_pct=0.2)
+
+    train_dataset = tensorflow_dataset(train_X_THS, train_y_TS, seed=seed+200,batch_size=100)
+    val_dataset = tensorflow_dataset(val_X_THS, val_y_TS, seed=seed+300,batch_size=100)
+    test_dataset = tensorflow_dataset(test_X_THS, test_y_TS, seed=seed+300,batch_size=100)
+
+    return train_dataset, val_dataset, test_dataset
 
 def train_val_test_split(X, y, train_pct, test_pct):
     val_pct = 1-train_pct-test_pct
