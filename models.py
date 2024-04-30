@@ -65,6 +65,24 @@ class MixtureWeightLayer(keras.layers.Layer):
     def call(self, inputs):
         return self.softmax(self.w)
     
+
+class SharedMixtureWeightLayer(keras.layers.Layer):
+    """Dumb layer that just returns mixture weights
+    Constrained to unit norm
+    """
+    def __init__(self, num_locations, num_components=2,):
+        super().__init__()
+        self.w = self.add_weight(
+            shape=(num_components, num_locations),
+            initializer="uniform",
+            trainable=True,
+        )
+        
+        self.softmax = keras.layers.Softmax(axis=0)
+
+    def call(self, inputs):
+        return self.softmax(self.w)
+    
 class CustomMixtureModel(keras.Model):
     def train_step(self, data):
         # Unpack the data. Its structure depends on your model and
@@ -93,6 +111,9 @@ class CustomMixtureModel(keras.Model):
         return {m.name: m.result() for m in self.metrics}
 
 def mixture_poissons(model, input_shape, num_components=2, seed=360):
+
+    num_features, num_locations = input_shape
+
     member_models = []
     for c in range(num_components):
         member_models.append(model(input_shape, seed=seed+1000*c))
@@ -103,7 +124,7 @@ def mixture_poissons(model, input_shape, num_components=2, seed=360):
 
     concat_layer = keras.layers.Concatenate(axis=-1)
 
-    mixture_weight_layer = MixtureWeightLayer(num_components=num_components)
+    mixture_weight_layer = SharedMixtureWeightLayer(num_locations, num_components=num_components)
 
     reshaped = [reshape_layer(member(inputs)) for member in member_models]
     concatted = concat_layer(reshaped)
@@ -116,34 +137,5 @@ def mixture_poissons(model, input_shape, num_components=2, seed=360):
     # outputs are NOT mixture, we need output of each component for loss
     model = CustomMixtureModel(inputs=inputs,
                         outputs=[concatted, mixture_weights])
-    
-    return model, mixture_weights
-
-def mixture_poissons2(input_shape, num_components=2, seed=360):
-    member_models = []
-    for c in range(num_components):
-        member_models.append(poisson_glm(input_shape, seed=seed+1000*c))
-
-    inputs = keras.Input(shape=input_shape)
-
-    reshape_layer = keras.layers.Reshape(target_shape=(-1,1))
-
-    concat_layer = keras.layers.Concatenate(axis=-1)
-
-    mixture_weight_layer = MixtureWeightLayer(num_components=num_components)
-
-    reshaped = [reshape_layer(member(inputs)) for member in member_models]
-    concatted = concat_layer(reshaped)
-    
-    mixture_weights = mixture_weight_layer(inputs)
-    add_weight_layer = keras.layers.Concatenate(axis=0)
-    concatted = add_weight_layer([concatted, tf.expand_dims(tf.transpose(mixture_weights,(1,0)),axis=0)])
-
-    # Call mixture layer to initialize
-    #mixed = mixture_layer([mixture_weights, concatted])
-
-    # outputs are NOT mixture, we need output of each component for loss
-    model = CustomMixtureModel(inputs=inputs,
-                        outputs=[concatted])
     
     return model, mixture_weights
