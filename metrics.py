@@ -17,11 +17,8 @@ def mixture_poi_loss(y_true, y_pred):
     poi_per_component = tf.map_fn(poisson_nll_fn, log_swapped)
     poi_per_component = tf.transpose(poi_per_component, [1,2,0])
 
-    mixture_weights = tf.ones((poi_per_component.shape[0],1)) * tf.squeeze(mixture_weights)
-    
-    dot_layer = keras.layers.Dot(axes=(1,-1))
 
-    mixture_poi_loss_val = dot_layer([mixture_weights, poi_per_component])
+    mixture_poi_loss_val = tf.einsum('ijk,kj->ij', poi_per_component, mixture_weights)
 
     return mixture_poi_loss_val
     
@@ -82,10 +79,8 @@ def negative_bpr_K_mix_uncurried(y_true, y_pred, negative_bpr_K_func=None):
     swapped = tf.transpose(component_preds, [2,0,1])
     negative_bpr_K_val = tf.map_fn(negative_bpr_K_func_w_true, swapped)
     negative_bpr_K_val = tf.transpose(swapped, [1,2,0])
-    
-    mixture_weights = tf.ones((negative_bpr_K_val.shape[0],1)) * tf.squeeze(mixture_weights)
-    dot_layer = keras.layers.Dot(axes=(1,-1))
-    mixture_bpr_loss_val = dot_layer([mixture_weights, negative_bpr_K_val])
+
+    mixture_bpr_loss_val =    tf.einsum('ijk,kj->ij', negative_bpr_K_val, mixture_weights)
 
     return mixture_bpr_loss_val
 
@@ -130,9 +125,7 @@ def mix_bpr(y_true, y_pred, negative_bpr_K_func=None):
 
     component_preds, mixture_weights = y_pred
 
-    mixture_weights = tf.ones((component_preds.shape[0],1)) * tf.squeeze(mixture_weights)
-    dot_layer = keras.layers.Dot(axes=(1,-1))
-    mixture_pred = dot_layer([mixture_weights, component_preds])
+    mixture_pred = tf.einsum('ijk,kj->ij', component_preds, mixture_weights)
 
     mixture_bpr_loss_val = negative_bpr_K_func(y_true, mixture_pred)
 

@@ -2,6 +2,7 @@ import numpy as np
 import tensorflow as tf
 
 from metrics import mix_bpr, mixture_poi_loss
+from datasets import to_numpy
 
 def training_loop(model, loss_func, optimizer, num_epochs, train_dataset, val_dataset, negative_bpr_K, verbose=False):
 
@@ -15,8 +16,10 @@ def training_loop(model, loss_func, optimizer, num_epochs, train_dataset, val_da
     losses['val']['nll']=[]
     losses['val']['bpr']=[]
 
-    train_X_THS, train_y_TS = np.concatenate([x for x, y in train_dataset], axis=0), np.concatenate([y for x, y in train_dataset], axis=0)
-    val_X_THS, val_y_TS = np.concatenate([x for x, y in val_dataset], axis=0), np.concatenate([y for x, y in val_dataset], axis=0)
+
+    
+    train_X_THS, train_y_TS = to_numpy(train_dataset)
+    val_X_THS, val_y_TS = to_numpy(val_dataset)
 
     for epoch in range(num_epochs):
 
