@@ -1,12 +1,13 @@
+import os
 from functools import partial
 
 import keras
 
-from datasets import example_datasets
+from datasets import example_datasets, to_numpy
 from models import mixture_poissons,poisson_glm
 from metrics import mixture_poi_loss, get_bpr_loss_func, mix_bpr, get_penalized_bpr_loss_func_mix
 from experiments import training_loop
-from plotting_funcs import plot_losses, plot_frontier
+from plotting_funcs import plot_losses, plot_frontier, plot_component_histograms
 
 def main(seed=None, num_components=None, learning_rate=None, epochs=None, outdir=None,
          penalty=None, threshold=None, K=None, do_only=None):
@@ -19,7 +20,8 @@ def main(seed=None, num_components=None, learning_rate=None, epochs=None, outdir
 
 
     train_dataset, val_dataset, test_dataset = example_datasets(H, T, seed=seed)
-
+    train_X_THS, train_y_TS = to_numpy(train_dataset)
+    val_X_THS, val_y_TS = to_numpy(val_dataset)
     input_shape = (H,S)
 
     negative_bpr_K = get_bpr_loss_func(K)
@@ -31,7 +33,11 @@ def main(seed=None, num_components=None, learning_rate=None, epochs=None, outdir
       losses_nll = training_loop(mix_model_nll, mixture_poi_loss, optimizer, epochs,
                                   train_dataset, val_dataset, negative_bpr_K,
                                 verbose=True)
+      mix_model_nll.save(os.path.join(outdir, 'nll_only_model'))
       plot_losses(losses_nll, title_add='NLL Only', save_dir=outdir, file_add='nll')
+
+      y_preds_val = mix_model_nll(val_X_THS)
+      plot_component_histograms(y_preds_val, title_add='NLL Only', save_dir=outdir, file_add='nll')
 
       # BPR loss only
       mix_model_bpr, _  = mixture_poissons(poisson_glm, input_shape, num_components=num_components)
@@ -39,7 +45,11 @@ def main(seed=None, num_components=None, learning_rate=None, epochs=None, outdir
       bpr_only_loss = partial(mix_bpr, negative_bpr_K_func=negative_bpr_K)
       losses_bpr = training_loop(mix_model_bpr, bpr_only_loss, optimizer, epochs, train_dataset, val_dataset, negative_bpr_K,
                                 verbose=True)
+      mix_model_bpr.save(os.path.join(outdir, 'bpr_only_model'))
       plot_losses(losses_bpr, title_add='BPR Only', save_dir=outdir, file_add='bpr')
+
+      y_preds_val = mix_model_bpr(val_X_THS)
+      plot_component_histograms(y_preds_val, title_add='BPR Only', save_dir=outdir, file_add='bpr')
 
     # Penalized loss
     mix_model_penalized, _  = mixture_poissons(poisson_glm, input_shape, num_components=num_components)
@@ -48,7 +58,11 @@ def main(seed=None, num_components=None, learning_rate=None, epochs=None, outdir
     losses_penalized = training_loop(mix_model_penalized, penalized_bpr_loss, optimizer,
                                       epochs, train_dataset, val_dataset, negative_bpr_K,
                                         verbose=True)
+    mix_model_penalized.save(os.path.join(outdir, 'penalized_model'))
     plot_losses(losses_penalized, title_add='Penalized', save_dir=outdir, file_add='penalized')
+    y_preds_val = mix_model_penalized(val_X_THS)
+    plot_component_histograms(y_preds_val, title_add='Penalized', save_dir=outdir, file_add='penalized')
+
 
     if do_only:
       plot_frontier(losses_nll, losses_bpr, losses_penalized, savedir=outdir)

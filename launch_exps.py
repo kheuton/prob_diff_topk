@@ -3,11 +3,11 @@ import subprocess
 
 Ks = [4]
 penalties = [50,500,5000]
-learning_rates = [0.005,]
+learning_rates = [0.005,0.01, 0.05]
 
-base_dir = '/cluster/tufts/hugheslab/kheuto01/synth_topk/12_lottery_500_H3'
+base_dir = '/cluster/tufts/hugheslab/kheuto01/synth_topk/save_long_plot_hist_H3'
 code_dir = '/cluster/home/kheuto01/code/prob_diff_topk'
-epochs=5000
+epochs=8000
 num_components=4
 seed=360
 thresholds=[0.45, 0.6, 0.7]

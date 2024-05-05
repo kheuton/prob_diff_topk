@@ -36,13 +36,13 @@ def poisson_glm(input_shape, seed=360):
     keras.utils.set_random_seed(seed)
     model = keras.Sequential(
         [
-            keras.layers.Input(shape=input_shape),
+            keras.layers.Input(name='Poisson_Input', shape=input_shape),
             # convolution to turn H,S into 1,S
             # Filters = size oute convolutiput space
             # kernel_size = size of thon window
             # dataformat = channels_first means that the input shape is (batch_size, features, time)
-            keras.layers.Conv1D(filters=1, kernel_size=1, activation='softplus', data_format='channels_first'),
-            keras.layers.Flatten(),
+            keras.layers.Conv1D(name='poisson_conv', filters=1, kernel_size=1, activation='softplus', data_format='channels_first'),
+            keras.layers.Flatten(name='poisson_flatten'),
         ]
     )
     return model
@@ -54,7 +54,7 @@ class MixtureWeightLayer(keras.layers.Layer):
     """
     def __init__(self, num_components=2,):
         super().__init__()
-        self.w = self.add_weight(
+        self.w = self.add_weight(name='mix_weights',
             shape=(num_components, 1),
             initializer="uniform",
             trainable=True,
@@ -70,9 +70,9 @@ class SharedMixtureWeightLayer(keras.layers.Layer):
     """Dumb layer that just returns mixture weights
     Constrained to unit norm
     """
-    def __init__(self, num_locations, num_components=2,):
-        super().__init__()
-        self.w = self.add_weight(
+    def __init__(self, num_locations, num_components=2, **kwargs):
+        super().__init__(**kwargs)
+        self.w = self.add_weight(name='shared_mix_weights',
             shape=(num_components, num_locations),
             initializer="uniform",
             trainable=True,
@@ -118,13 +118,13 @@ def mixture_poissons(model, input_shape, num_components=2, seed=360):
     for c in range(num_components):
         member_models.append(model(input_shape, seed=seed+1000*c))
 
-    inputs = keras.Input(shape=input_shape)
+    inputs = keras.Input(shape=input_shape, name='mix_input')
 
-    reshape_layer = keras.layers.Reshape(target_shape=(-1,1))
+    reshape_layer = keras.layers.Reshape(name='mix_reshape', target_shape=(-1,1))
 
-    concat_layer = keras.layers.Concatenate(axis=-1)
+    concat_layer = keras.layers.Concatenate(name='mix_concat',axis=-1)
 
-    mixture_weight_layer = SharedMixtureWeightLayer(num_locations, num_components=num_components)
+    mixture_weight_layer = SharedMixtureWeightLayer(num_locations,name='shared_mix_layer', num_components=num_components)
 
     reshaped = [reshape_layer(member(inputs)) for member in member_models]
     concatted = concat_layer(reshaped)
@@ -135,7 +135,7 @@ def mixture_poissons(model, input_shape, num_components=2, seed=360):
     #mixed = mixture_layer([mixture_weights, concatted])
 
     # outputs are NOT mixture, we need output of each component for loss
-    model = CustomMixtureModel(inputs=inputs,
+    model = CustomMixtureModel(name='mix_model',inputs=inputs,
                         outputs=[concatted, mixture_weights])
     
     return model, mixture_weights

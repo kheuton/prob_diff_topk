@@ -12,6 +12,68 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import RegularPolygon
 
+def plot_component_histograms(y_preds, true_values=[0,7,10,100],title_add='', save_dir=None, file_add=''):
+    """Graph histogram of predictions
+
+    Args:
+        y_preds: Tuple of component predictions and mixture weights
+            component predictions is batch-by-locations-by-components
+            mixture weights is 
+    """
+    component_preds, mixture_weights = y_preds
+
+    print(mixture_weights.shape)
+
+    # Get the number of locations and mixture components
+    num_locations = component_preds.shape[1]
+    num_components = component_preds.shape[2]
+
+    assert(len(true_values)==num_components)
+
+    location_type_indices = [(0,4), (4, 8), (8, 12)]
+    location_type_names = ['Consistent_7', '10_or_0', 'Lottery_100']
+
+    # Iterate over the locations
+    for indices, name in zip(location_type_indices, location_type_names):
+        loc_min, loc_max = indices
+
+        weights = mixture_weights[:, loc_min:loc_max]
+
+        # Create a new figure for each location
+        fig, ax = plt.subplots()
+        n_vals = []
+
+        # Iterate over the mixture components
+        for component_idx in range(num_components):
+            mix_weight = np.mean(weights[component_idx,:])
+            # Get the predictions for the current location and component
+            predictions = component_preds[:, loc_min:loc_max, component_idx]
+            # make predictions 1d
+            predictions = predictions.numpy().flatten()
+            true_val = true_values[component_idx]
+
+            n_pred, _, _ = ax.hist(predictions, bins=range(120), label=f'Component {component_idx+1}: {mix_weight*100:.1f}%',
+                     density=True)
+            # Plot histogram from a  poisson model with mean 7
+            n_true, _, _ = ax.hist(np.random.poisson(true_val, 1000),
+                      bins=range(120), label=f'Poisson({true_val})', density=True, alpha=0.5)
+            n_vals.append(n_pred)
+            n_vals.append(n_true)
+
+        plt.ylim(0, max([max(n) for n in n_vals]))
+        # Add labels and legend
+        plt.xlabel('Value')
+        plt.ylabel('Prediction')
+        plt.title(f'{name} {title_add}')
+        plt.legend()
+
+        # Show the plot
+        plt.show()
+        
+        if save_dir is not None:
+            plt.savefig(os.path.join(save_dir, f'{name}_hist_{file_add}.png'))
+
+
 def plot_losses(losses, title_add='', save_dir=None, file_add=''):
     # plot loss and metrics from history
     plt.figure()
