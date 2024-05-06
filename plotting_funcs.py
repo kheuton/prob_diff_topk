@@ -72,11 +72,12 @@ def plot_component_histograms(y_preds, true_values=[0,7,10,100],title_add='', sa
         plt.title(f'{name} {title_add}')
         plt.legend()
 
-        # Show the plot
-        plt.show()
+
         
         if save_dir is not None:
             plt.savefig(os.path.join(save_dir, f'{name}_hist_{file_add}.png'))
+        # Show the plot
+        plt.show()
 
 def plot_winners(y_preds, K, title_add='',save_dir=None, file_add=''):
 
@@ -105,10 +106,11 @@ def plot_winners(y_preds, K, title_add='',save_dir=None, file_add=''):
     plt.xlabel("Location")
     plt.ylabel("Frequency in top K")
     plt.title(f"Frequency in top {K} by location {title_add}")
-    plt.show()
+
 
     if save_dir is not None:
         plt.savefig(os.path.join(save_dir, f'winners_{file_add}.png'))
+    plt.show()
 
 
     return
@@ -122,9 +124,9 @@ def plot_losses(losses, title_add='', save_dir=None, file_add=''):
     plt.ylabel('Loss')
     plt.xlabel('Epoch')
     plt.legend(['Train', 'Val'], loc='upper left')
-    plt.show()
     if save_dir is not None:
         plt.savefig(os.path.join(save_dir, f'loss_{file_add}.png'))
+    plt.show()
 
     
     plt.figure()
@@ -134,9 +136,9 @@ def plot_losses(losses, title_add='', save_dir=None, file_add=''):
     plt.ylabel('NLL')
     plt.xlabel('Epoch')
     plt.legend(['Train', 'Val'], loc='upper left')
-    plt.show()
     if save_dir is not None:
         plt.savefig(os.path.join(save_dir, f'nll_{file_add}.png'))
+    plt.show()
 
     
     plt.figure()
@@ -146,9 +148,9 @@ def plot_losses(losses, title_add='', save_dir=None, file_add=''):
     plt.ylabel('Negative BPR')
     plt.xlabel('Epoch')
     plt.legend(['Train', 'Val'], loc='upper left')
-    plt.show()
     if save_dir is not None:
         plt.savefig(os.path.join(save_dir, f'bpr_{file_add}.png'))
+    plt.show()
 
 
 def plot_frontier(losses_nll, losses_bpr, losses_penalized, savedir=None):
@@ -158,9 +160,9 @@ def plot_frontier(losses_nll, losses_bpr, losses_penalized, savedir=None):
     plt.plot(-np.array(losses_penalized['val']['nll'][-1]), -np.array(losses_penalized['val']['bpr'][-1]), marker='o', label='Penalized')
     plt.title('Validation Frontier')
     plt.legend()
-    plt.show()
     if savedir is not None:
         plt.savefig(os.path.join(savedir, f'val_frontier.png'))
+    plt.show()
 
     plt.figure()
     plt.plot(-np.array(losses_nll['train']['nll'][-1]), -np.array(losses_nll['train']['bpr'][-1]), marker='o', label='NLL')
@@ -168,9 +170,9 @@ def plot_frontier(losses_nll, losses_bpr, losses_penalized, savedir=None):
     plt.plot(-np.array(losses_penalized['train']['nll'][-1]), -np.array(losses_penalized['train']['bpr'][-1]), marker='o', label='Penalized')
     plt.title('Training Frontier')
     plt.legend()
-    plt.show()
     if savedir is not None:
         plt.savefig(os.path.join(savedir, f'train_frontier.png'))
+    plt.show()
 
     return
 
