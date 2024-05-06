@@ -11,6 +11,7 @@ from matplotlib.patches import RegularPolygon
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import RegularPolygon
+import tensorflow as tf
 
 def plot_component_histograms(y_preds, true_values=[0,7,10,100],title_add='', save_dir=None, file_add=''):
     """Graph histogram of predictions
@@ -52,15 +53,19 @@ def plot_component_histograms(y_preds, true_values=[0,7,10,100],title_add='', sa
             predictions = predictions.numpy().flatten()
             true_val = true_values[component_idx]
 
-            n_pred, _, _ = ax.hist(predictions, bins=range(120), label=f'Component {component_idx+1}: {mix_weight*100:.1f}%',
-                     density=True)
+            # plot histogram with bins from 0 to 12 every 0.1
+            bins = np.arange(-1, 1+int(np.max( component_preds[:, loc_min:loc_max,:])), 0.5)
+            n_pred, _, _ = ax.hist(predictions, bins=bins, 
+                                   label=f'Component {component_idx+1}: {mix_weight*100:.1f}%',
+                                   density=True,
+                                   alpha=0.8)
             # Plot histogram from a  poisson model with mean 7
-            n_true, _, _ = ax.hist(np.random.poisson(true_val, 1000),
-                      bins=range(120), label=f'Poisson({true_val})', density=True, alpha=0.5)
+            #n_true, _, _ = ax.hist(np.random.poisson(true_val, 1000),
+            #          bins=range(120), label=f'Poisson({true_val})', density=True, alpha=0.5)
             n_vals.append(n_pred)
-            n_vals.append(n_true)
+            #n_vals.append(n_true)
 
-        plt.ylim(0, max([max(n) for n in n_vals]))
+        #plt.ylim(0, max([max(n) for n in n_vals]))
         # Add labels and legend
         plt.xlabel('Value')
         plt.ylabel('Prediction')
@@ -73,6 +78,40 @@ def plot_component_histograms(y_preds, true_values=[0,7,10,100],title_add='', sa
         if save_dir is not None:
             plt.savefig(os.path.join(save_dir, f'{name}_hist_{file_add}.png'))
 
+def plot_winners(y_preds, K, title_add='',save_dir=None, file_add=''):
+
+    plt.figure()
+    component_preds, mixture_weights = y_preds
+
+    mixture_pred = tf.einsum('ijk,kj->ij', component_preds, mixture_weights)
+
+    T, S = mixture_pred.shape
+
+    # mixture pred is batch by locations
+    # plot bar graph of how often each location is in top K
+    winners = np.argsort(mixture_pred, axis=1)[:, -K:]
+    counts = np.zeros((S,))
+    for i in range(S):
+        counts[i] = np.sum(winners == i)
+
+    # plot frequencies instead of counts
+    counts = counts / T
+
+    colors = ['blue']*4 + ['green']*4 + ['red']*4
+
+    plt.bar(np.arange(S), counts, color=colors)
+    
+    
+    plt.xlabel("Location")
+    plt.ylabel("Frequency in top K")
+    plt.title(f"Frequency in top {K} by location {title_add}")
+    plt.show()
+
+    if save_dir is not None:
+        plt.savefig(os.path.join(save_dir, f'winners_{file_add}.png'))
+
+
+    return
 
 def plot_losses(losses, title_add='', save_dir=None, file_add=''):
     # plot loss and metrics from history
