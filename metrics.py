@@ -97,6 +97,12 @@ def get_bpr_loss_func(K, num_samples=1000, sigma=1, noise='normal'):
 
     return negative_bpr_K
 
+def get_unperturbed_bpr_loss_func(K):
+
+    top_K_idx_func = partial(top_k_idx, k=K)
+    negative_bpr_K = partial(negative_bpr_K_uncurried,K=K, perturbed_top_K_func=top_K_idx_func)
+    return negative_bpr_K
+
 
 def uncurried_penalized_bpr(y_true, y_pred, loss_func=poisson_nll, penalty=1.0, 
                             bpr_threshold=0.40, negative_bpr_K_func=None):

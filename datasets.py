@@ -19,7 +19,7 @@ def make_data(dist_S, H=50, T=500, seed=360):
     # In order to have T timepoints each with H historical observations, we need T+H samples 
     data_HT_S = np.zeros((H+T, S))
     for s, dist in enumerate(dist_S):
-        random_state = np.random.RandomState(10000 * seed + s)
+        random_state = np.random.RandomState(10000 * seed + s*123456)
         data_HT_S[:, s] = dist.rvs(size=H+T, random_state=random_state)
 
     X_THS = np.array([data_HT_S[t:H+t,:] for t in range(T)], dtype=np.float32)
@@ -27,7 +27,7 @@ def make_data(dist_S, H=50, T=500, seed=360):
 
     return X_THS, y_TS
 
-def example_datasets(H, T, seed=360, batch_size=None):
+def example_datasets(H, T, seed=360, batch_size=None, train_pct=0.6, test_pct=0.2, return_dists=False):
 
     if batch_size is None:
         batch_size=T
@@ -51,20 +51,23 @@ def example_datasets(H, T, seed=360, batch_size=None):
 
     (train_X_THS, train_y_TS), \
     (val_X_THS, val_y_TS), \
-    (test_X_THS, test_y_TS) = train_val_test_split(X_THS, y_TS, train_pct=0.6, test_pct=0.2)
+    (test_X_THS, test_y_TS) = train_val_test_split(X_THS, y_TS, train_pct=train_pct, test_pct=test_pct)
 
     train_dataset = tensorflow_dataset(train_X_THS, train_y_TS, seed=seed+200,batch_size=batch_size)
     val_dataset = tensorflow_dataset(val_X_THS, val_y_TS, seed=seed+300,batch_size=batch_size)
     test_dataset = tensorflow_dataset(test_X_THS, test_y_TS, seed=seed+300,batch_size=batch_size)
 
-    return train_dataset, val_dataset, test_dataset
+    if return_dists:
+        return train_dataset, val_dataset, test_dataset, dist_S
+    else:
+        return train_dataset, val_dataset, test_dataset
 
 def train_val_test_split(X, y, train_pct, test_pct):
     val_pct = 1-train_pct-test_pct
 
-    assert(int(train_pct*len(X)) == train_pct*len(X))
-    assert(int(val_pct*len(X)) == val_pct*len(X))
-    assert(int(test_pct*len(X)) == test_pct*len(X))
+    assert(np.isclose(int(train_pct*len(X)), train_pct*len(X), atol=1e-3))
+    assert(np.isclose(int(val_pct*len(X)), val_pct*len(X), atol=1e-3))
+    assert(np.isclose(int(test_pct*len(X)), test_pct*len(X), atol=1e-3))
 
     train_X = X[:int(train_pct*len(X))]
     train_y = y[:int(train_pct*len(X))]
