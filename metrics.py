@@ -127,6 +127,12 @@ def get_penalized_bpr_loss_func(loss_func, K, penalty, bpr_threshold,
     return penalized_bpr
 
 @tf.function
+def cross_ratio_decision(predicted_y, location_axis =-1):
+    denominator = tf.reduce_sum(predicted_y, axis=location_axis, keepdims=True)
+    return predicted_y/denominator
+
+
+@tf.function
 def mix_bpr(y_true, y_pred, negative_bpr_K_func=None):
 
     component_preds, mixture_weights = y_pred
