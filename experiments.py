@@ -62,10 +62,13 @@ def training_loop(model, loss_func, optimizer, num_epochs, train_dataset, val_da
 
     return losses
 
+@tf.function
 def overall_gradient_calculation(gradient_BSp, decision_gradient_BS):
     num_param_dims = tf.rank(gradient_BSp)-2
-
-    decision_gradient_BSp = tf.reshape(decision_gradient_BS, decision_gradient_BS.shape + [1]*num_param_dims.numpy())
+    num_param_dims_tf = tf.cast(num_param_dims, tf.int32)
+    new_shape = tf.concat([tf.shape(decision_gradient_BS), tf.ones([num_param_dims_tf], tf.int32)], axis=0)
+    decision_gradient_BSp=tf.reshape(decision_gradient_BS, new_shape)
+    #decision_gradient_BSp = tf.reshape(decision_gradient_BS, decision_gradient_BS.shape + [1]*num_param_dims.numpy())
 
     overall_gradient_BSp = gradient_BSp*decision_gradient_BSp
 
@@ -73,11 +76,14 @@ def overall_gradient_calculation(gradient_BSp, decision_gradient_BS):
     overall_gradient = tf.reduce_sum(overall_gradient_BSp, axis=[0,1])
     return overall_gradient
     
-#@tf.function
+@tf.function
 def score_function_trick(jacobian_MBSp, decision_MBS):
     num_param_dims = tf.rank(jacobian_MBSp)-3
     # expand decision to match jacobian
-    decision_MBSp = tf.reshape(decision_MBS, decision_MBS.shape + [1]*num_param_dims.numpy())
+    #decision_MBSp = tf.reshape(decision_MBS, decision_MBS.shape + [1]*num_param_dims.numpy())
+    num_param_dims_tf = tf.cast(num_param_dims, tf.int32)
+    new_shape = tf.concat([tf.shape(decision_MBS), tf.ones([num_param_dims_tf], tf.int32)], axis=0)
+    decision_MBSp=tf.reshape(decision_MBS, new_shape)
 
     scaled_jacobian_MBSp = jacobian_MBSp*decision_MBSp
 
@@ -114,6 +120,8 @@ def training_loop_score_function_trick(model, optimizer, num_epochs, train_datas
         if verbose:
             print(f'Epoch {epoch}')
 
+        batch_losses = {'train': {'loss': [], 'nll': [], 'bpr': []}}
+
         for step, (x_BHS, y_BS) in enumerate(train_dataset):
             # Open a GradientTape to record the operations run
             # during the forward pass, which enables auto-differentiation.
@@ -125,12 +133,13 @@ def training_loop_score_function_trick(model, optimizer, num_epochs, train_datas
 
                 #  could create a custom model class that returns 
                 # the appropriate tfp.dist given outputs
+                # add constant so that rate is never 0
                 mix = tfp.distributions.MixtureSameFamily(
                     mixture_distribution=tfp.distributions.Categorical(probs=mixture_weights_SK),
-                    components_distribution = tfp.distributions.Poisson(rate=prob_params_BSK))
+                    components_distribution = tfp.distributions.Poisson(rate=prob_params_BSK+1e-13))
 
                 # add constant to avoid log 0
-                sample_y_MBS = mix.sample(num_score_func_samples)+1e-13
+                sample_y_MBS = mix.sample(num_score_func_samples)
 
                 sample_log_probs_MBS = mix.log_prob(sample_y_MBS)
 
@@ -155,22 +164,26 @@ def training_loop_score_function_trick(model, optimizer, num_epochs, train_datas
             jacobian_pMBS = jacobian_tape.jacobian(sample_log_probs_MBS, model.trainable_weights)
             param_gradient_pBS = [score_function_trick(j, sample_decisions_MBS) for j in jacobian_pMBS]
 
-            loss_gradients_BS = loss_tape.gradient(3, expected_decisions_BS)
+            loss_gradients_BS = loss_tape.gradient(loss_B, expected_decisions_BS)
             overall_gradient = [overall_gradient_calculation(g, loss_gradients_BS) for g in param_gradient_pBS]
 
             # Run one step of gradient descent by updating
             # the value of the variables to minimize the loss.
             optimizer.apply_gradients(zip(overall_gradient, model.trainable_weights))
 
-            losses['train']['loss'].append(tf.reduce_mean(loss_B))
-            losses['train']['nll'].append(tf.reduce_mean(tf.reduce_sum(observed_log_prob_BS, axis=-1)))
-            losses['train']['bpr'].append(tf.reduce_mean(bpr_B))
+            batch_losses['train']['loss'].append(tf.reduce_mean(loss_B))
+            batch_losses['train']['nll'].append(tf.reduce_mean(tf.reduce_sum(observed_log_prob_BS, axis=-1)))
+            batch_losses['train']['bpr'].append(tf.reduce_mean(bpr_B))
+
+        losses['train']['loss'].append(tf.reduce_mean(batch_losses['train']['loss']))
+        losses['train']['nll'].append(tf.reduce_mean(batch_losses['train']['nll']))
+        losses['train']['bpr'].append(tf.reduce_mean(batch_losses['train']['bpr']))
             
-            if verbose:
-                # print all metrics
-                print(f'Loss: {losses["train"]["loss"][-1]}')
-                print(f'NLL: {losses["train"]["nll"][-1]}')
-                print(f'BPR: {losses["train"]["bpr"][-1]}')
+        if verbose:
+            # print all metrics
+            print(f'Loss: {losses["train"]["loss"][-1]}')
+            print(f'NLL: {losses["train"]["nll"][-1]}')
+            print(f'BPR: {losses["train"]["bpr"][-1]}')
 
         '''
         y_preds = model(train_X_THS)
