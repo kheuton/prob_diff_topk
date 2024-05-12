@@ -62,13 +62,20 @@ def top_k_idx(input_BD, **kwargs):
 
 def negative_bpr_K_uncurried(y_true, y_pred, K=3, perturbed_top_K_func=None):
     
+    loss_val = -positive_bpr_K_uncurried(y_true, y_pred, K=K, perturbed_top_K_func=perturbed_top_K_func)
+
+    return loss_val
+
+def positive_bpr_K_uncurried(y_true, y_pred, K=3, perturbed_top_K_func=None):
+    
     top_K_ids = perturbed_top_K_func(y_pred)
     true_top_K_val, true_top_K_idx = tf.math.top_k(y_true, k=K)
     denominator = tf.reduce_sum(true_top_K_val, axis=-1)
     numerator = tf.reduce_sum(top_K_ids * y_true, axis=-1)
-    loss_val = tf.reduce_mean(-numerator/denominator)
+    #bpr = tf.reduce_mean(numerator/denominator)
+    bpr = numerator/denominator
 
-    return loss_val
+    return bpr
 
 def negative_bpr_K_mix_uncurried(y_true, y_pred, negative_bpr_K_func=None):
     
@@ -96,6 +103,18 @@ def get_bpr_loss_func(K, num_samples=1000, sigma=1, noise='normal'):
     negative_bpr_K = partial(negative_bpr_K_uncurried,K=K, perturbed_top_K_func=perturbed_top_K)
 
     return negative_bpr_K
+
+def get_perturbed_bpr_func(K, num_samples=1000, sigma=1, noise='normal'):
+    top_K_idx_func = partial(top_k_idx, k=K)
+    perturbed_top_K = perturbed(top_K_idx_func,
+                                    num_samples=num_samples,
+                                    sigma=sigma,
+                                    noise=noise,
+                                    batched=True)
+
+    bpr_K = partial(positive_bpr_K_uncurried,K=K, perturbed_top_K_func=perturbed_top_K)
+    return bpr_K
+
 
 def get_unperturbed_bpr_loss_func(K):
 
