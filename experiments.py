@@ -155,7 +155,7 @@ def training_loop_score_function_trick(model, optimizer, num_epochs, train_datas
             jacobian_pMBS = jacobian_tape.jacobian(sample_log_probs_MBS, model.trainable_weights)
             param_gradient_pBS = [score_function_trick(j, sample_decisions_MBS) for j in jacobian_pMBS]
 
-            loss_gradients_BS = loss_tape.gradient(loss_B, expected_decisions_BS)
+            loss_gradients_BS = loss_tape.gradient(3, expected_decisions_BS)
             overall_gradient = [overall_gradient_calculation(g, loss_gradients_BS) for g in param_gradient_pBS]
 
             # Run one step of gradient descent by updating
