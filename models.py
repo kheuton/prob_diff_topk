@@ -86,6 +86,23 @@ class LocationSpecificMixtureWeightLayer(keras.layers.Layer):
     def call(self, inputs):
         return self.softmax(self.w)
     
+class LocationSpecificMixtureWeightLayerRightOrder(keras.layers.Layer):
+    """Dumb layer that just returns mixture weights
+    Constrained to unit norm
+    """
+    def __init__(self, num_locations, num_components=2, **kwargs):
+        super().__init__(**kwargs)
+        self.w = self.add_weight(name='shared_mix_weights',
+            shape=(num_locations, num_components ),
+            initializer="uniform",
+            trainable=True,
+        )
+        
+        self.softmax = keras.layers.Softmax(axis=1)
+
+    def call(self, inputs):
+        return self.softmax(self.w)
+    
 class CustomMixtureModel(keras.Model):
     """Does nothing. Just functional model."""
 
@@ -262,3 +279,41 @@ def mixture_poissons(model, input_shape, num_components=2, seed=360):
                         outputs=[concatted, mixture_weights])
     
     return model, mixture_weights
+
+def get_mixture(model, input_shape, num_components=2, seed=360):
+
+    num_features, num_locations = input_shape
+
+    member_models = []
+    for c in range(num_components):
+        member_models.append(model(input_shape, seed=seed+1000*c))
+
+    # Define layers
+    inputs = keras.Input(shape=input_shape, name='mix_input')
+    reshape_layer = keras.layers.Reshape(name='mix_reshape', target_shape=(-1,1))
+    concat_layer = keras.layers.Concatenate(name='mix_concat',axis=-1)
+    add_layer = keras.layers.Add(name='add_const')
+
+
+    mixture_weight_layer = LocationSpecificMixtureWeightLayerRightOrder(num_locations,name='mixture_weights', num_components=num_components)
+
+    reshaped = [reshape_layer(member(inputs)) for member in member_models]
+    concatted = concat_layer(reshaped)
+    added = add_layer([concatted, tf.constant([1e-13])])
+    
+    mixture_weights = mixture_weight_layer(inputs)
+
+    mixture_distribution_layer = tfp.layers.DistributionLambda(lambda params: 
+        tfp.distributions.MixtureSameFamily(mixture_distribution=tfp.distributions.Categorical(probs=params[0]),
+                                            components_distribution = tfp.distributions.Poisson(rate=params[1], validate_args=True)))
+    
+    outputs = mixture_distribution_layer([mixture_weights, added])
+
+    # Call mixture layer to initialize
+    #mixed = mixture_layer([mixture_weights, concatted])
+
+    # outputs are NOT mixture, we need output of each component for loss
+    model = CustomMixtureModel(name='mix_model',inputs=inputs,
+                        outputs=[outputs])
+    
+    return model
