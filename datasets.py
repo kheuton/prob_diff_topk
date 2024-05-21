@@ -27,17 +27,19 @@ def make_data(dist_S, H=50, T=500, seed=360):
 
     return X_THS, y_TS
 
-def example_datasets(H, T, seed=360, batch_size=None, train_pct=0.6, test_pct=0.2, return_dists=False):
+def example_datasets(H, T, dist_S=None, seed=360, batch_size=None, train_pct=0.6, test_pct=0.2,
+                      return_dists=False, return_numpy=False):
 
     if batch_size is None:
         batch_size=T
 
-    consistent_4 = [QuantizedNormal(7, 0.1) for _ in range(4)]
+    if dist_S is None:
+        consistent_4 = [QuantizedNormal(7, 0.1) for _ in range(4)]
+        highvar_4 = [ZeroInflatedDist(QuantizedNormal(10, 0.1), 1-0.7) for _ in range(4)]
+        powerball_4 = [ZeroInflatedDist(QuantizedNormal(100, 0.1), 0.9) for _ in range(4)]
+        dist_S = consistent_4 + highvar_4 +powerball_4
 
-    highvar_4 = [ZeroInflatedDist(QuantizedNormal(10, 0.1), 1-0.7) for _ in range(4)]
 
-    powerball_4 = [ZeroInflatedDist(QuantizedNormal(100, 0.1), 0.9) for _ in range(4)]
-    dist_S = consistent_4 + highvar_4 +powerball_4
     X_THS, y_TS = make_data(dist_S, H=H, T=T, seed=seed)
 
     # check that each final history is equal to the previous observation
@@ -57,10 +59,14 @@ def example_datasets(H, T, seed=360, batch_size=None, train_pct=0.6, test_pct=0.
     val_dataset = tensorflow_dataset(val_X_THS, val_y_TS, seed=seed+300,batch_size=batch_size)
     test_dataset = tensorflow_dataset(test_X_THS, test_y_TS, seed=seed+300,batch_size=batch_size)
 
+    return_objs = (train_dataset, val_dataset, test_dataset)
+
     if return_dists:
-        return train_dataset, val_dataset, test_dataset, dist_S
-    else:
-        return train_dataset, val_dataset, test_dataset
+        return_objs += (dist_S,)
+    if return_numpy:
+        return_objs += ((train_X_THS, train_y_TS), (val_X_THS, val_y_TS), (test_X_THS, test_y_TS))
+
+    return return_objs
 
 def train_val_test_split(X, y, train_pct, test_pct):
     val_pct = 1-train_pct-test_pct
