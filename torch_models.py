@@ -2,6 +2,7 @@ import torch
 
 import torch.nn as nn
 from torch.distributions import Categorical, Poisson, MixtureSameFamily
+from torch_distributions import TruncatedNormal
 
 
 class MixtureOfPoissonsModel(nn.Module):
@@ -61,6 +62,64 @@ class MixtureOfPoissonsModel(nn.Module):
         
         return mixture_dist
     
+class MixtureOfTruncNormModel(nn.Module):
+    def __init__(self, num_components=4, S=12, low=0, high=200):
+        super(MixtureOfTruncNormModel, self).__init__()
+        self.num_components = num_components
+        self.S = S
+        self.low=low
+        self.high=high
+        
+        # Initialize the log rates and mixture probabilities as learnable parameters
+        self.softplusinv_means = nn.Parameter(torch.rand(num_components)*20, requires_grad=True) 
+        self.softplusinv_scales = nn.Parameter(torch.rand(num_components), requires_grad=True) 
+        self.mixture_probs = nn.Parameter(torch.rand(S, num_components), requires_grad=True)  
+
+    def params_to_single_tensor(self):
+        return torch.cat([param.view(-1) for param in self.parameters()])
+    
+    def single_tensor_to_params(self, single_tensor):
+        softplusinv_means = single_tensor[:self.num_components]
+        softplusinv_scales = single_tensor[self.num_components:2*self.num_components]
+        mixture_probs = single_tensor[2*self.num_components:].view(self.S, self.num_components)
+        return softplusinv_means, softplusinv_scales, mixture_probs
+    
+    def update_params(self, single_tensor):
+        softplusinv_means, softplusinv_scales, mixture_probs = self.single_tensor_to_params(single_tensor)
+        self.softplusinv_means.data = softplusinv_means
+        self.softplusinv_scales.data = softplusinv_scales
+        self.mixture_probs.data = mixture_probs
+        return
+    
+    def build_from_single_tensor(self, single_tensor):
+        softplusinv_means, softplusinv_scales, mixture_probs = self.single_tensor_to_params(single_tensor)
+        means = torch.nn.functional.softplus(softplusinv_means)
+        scales = torch.nn.functional.softplus(softplusinv_scales) + 0.2
+        mixture_probs_normalized = torch.nn.functional.softmax(mixture_probs, dim=1)
+        categorical_dist = Categorical(mixture_probs_normalized)
+        expanded_means = means.expand(self.S, self.num_components)
+        expanded_scales = scales.expand(self.S, self.num_components)
+        trunc_norm_dist = TruncatedNormal(expanded_means, expanded_scales, self.low, self.high, validate_args=False)
+        mixture_dist = MixtureSameFamily(categorical_dist, trunc_norm_dist, validate_args=False)
+        return mixture_dist
+        
+    def forward(self):
+        means = torch.nn.functional.softplus(self.softplusinv_means)
+        scales = torch.nn.functional.softplus(self.softplusinv_scales) + 0.2
+        mixture_probs_normalized = torch.nn.functional.softmax(self.mixture_probs, dim=1)
+        categorical_dist = Categorical(mixture_probs_normalized)
+        expanded_means = means.expand(self.S, self.num_components)
+        expanded_scales = scales.expand(self.S, self.num_components)
+        trunc_norm_dist = TruncatedNormal(expanded_means, expanded_scales, self.low, self.high)
+        
+        # Create the MixtureSameFamily distribution
+        mixture_dist = MixtureSameFamily(categorical_dist, trunc_norm_dist,  validate_args=False)
+        
+        
+        
+        return mixture_dist
+
+    
 def torch_bpr_uncurried(y_pred, y_true, K=4, perturbed_top_K_func=None):
 
     top_K_ids = perturbed_top_K_func(y_pred)
@@ -72,4 +131,16 @@ def torch_bpr_uncurried(y_pred, y_true, K=4, perturbed_top_K_func=None):
     numerator = torch.sum(top_K_ids * y_true, dim=-1)
     bpr = numerator/denominator
 
+    return bpr
+
+def deterministic_bpr(y_pred, y_true, K=4):
+
+    true_topk = torch.topk(y_true, K)
+    pred_topk = torch.topk(y_pred, K)
+    # index y_pred with top k indicies from y_true
+    true_value_at_pred_topk = torch.gather(y_true, 1, pred_topk.indices)
+
+    numerator = torch.sum(true_value_at_pred_topk, dim=-1)
+    denominator = torch.sum(true_topk.values, dim=-1)
+    bpr = numerator/denominator
     return bpr
