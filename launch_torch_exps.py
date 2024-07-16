@@ -6,9 +6,9 @@ bpr_weights = [0,500,5000]
 nll_weights = [0,1]
 step_sizes = [0.1, 0.01, 0.001, 0.0001]
 
-base_dir = '/cluster/tufts/hugheslab/kheuto01/synth_topk_torch_500/'
+base_dir = '/cluster/tufts/hugheslab/kheuto01/synth_topk_torch_gf_1000/'
 code_dir = '/cluster/home/kheuto01/code/prob_diff_topk'
-epochs=500
+epochs=1000
 num_components=4
 seed=360
 thresholds=[0.55]

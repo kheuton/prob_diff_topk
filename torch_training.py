@@ -6,8 +6,9 @@ def training_loop(epochs, model, optimizer, K, threshold, train_T, M_score_func,
     bprs = []
     nlls = []
     for epoch in range(epochs):
+        optimizer.zero_grad()
         mix_model = model()
-    
+        
         y_sample_TMS = mix_model.sample((train_T, M_score_func))
         y_sample_action_TMS = mix_model.sample((train_T, M_action))
 
@@ -30,7 +31,7 @@ def training_loop(epochs, model, optimizer, K, threshold, train_T, M_score_func,
         positive_bpr_T = torch_bpr_uncurried(ratio_rating_TS, torch.tensor(train_y_TS), K=K, perturbed_top_K_func=perturbed_top_K_func)
         bpr_threshold_diff_T = positive_bpr_T - threshold
         violate_threshold_flag = bpr_threshold_diff_T < 0
-        negative_bpr_loss = torch.mean(-bpr_threshold_diff_T)
+        negative_bpr_loss = torch.mean(-bpr_threshold_diff_T*violate_threshold_flag)
         
         nll = torch.sum(-mix_model.log_prob( torch.tensor(train_y_TS)))
 
@@ -44,6 +45,8 @@ def training_loop(epochs, model, optimizer, K, threshold, train_T, M_score_func,
         gradient_tuple = model.single_tensor_to_params(gradient_P)
 
         for param, gradient in zip(model.parameters(), gradient_tuple):
+            if nll_weight>0:
+                gradient = gradient + param.grad
             param.grad = gradient
         optimizer.step()
 
