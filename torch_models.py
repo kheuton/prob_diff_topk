@@ -118,6 +118,24 @@ class MixtureOfTruncNormModel(nn.Module):
         
         
         return mixture_dist
+    
+    def plot_learned(self, data=None, ax=None):
+        import matplotlib.pyplot as plt
+        import numpy as np
+        import seaborn as sns
+        
+        mixture_dist = self.forward()
+
+        samples = mixture_dist.sample((1000,))
+        samples = samples.view(-1).detach().numpy()
+        # plot the kde only
+        sns.kdeplot(samples, bw_adjust=0.5, ax=ax)
+        # plot hist of data if present
+        if data is not None:
+            sns.histplot(data.flatten(), stat='density', bins=50, color='red', alpha=0.5, ax=ax)
+        plt.show()
+        
+        return
 
     
 def torch_bpr_uncurried(y_pred, y_true, K=4, perturbed_top_K_func=None):
