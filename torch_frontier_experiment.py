@@ -8,7 +8,7 @@ from torch_perturb.torch_pert_topk import PerturbedTopK
 from torch_training import train_epoch
 
 def main(step_size=None, epochs=None, bpr_weight=None,
-         nll_weight=None, seed=None, outdir=None, threshold=None,
+         nll_weight=None, seed=None, init_idx=None, outdir=None, threshold=None,
            num_components=None, perturbed_noise=None, initialization=None,
            mu1=None, mu2=None):
 
@@ -31,6 +31,21 @@ def main(step_size=None, epochs=None, bpr_weight=None,
         train_y_TS[:, s] = dist.rvs(size=T, random_state=random_state)
 
     model = MixtureOfTruncNormModel(num_components=num_components, S=S, low=0, high=100)
+    if init_idx is not None:
+        # Reproducibly, randomly generate some numbers using a numpy rng
+        init_rng = np.random.RandomState(1989)
+        # generate 20 sets of 2 floats between 0.5 and 60
+        all_means = init_rng.uniform(0.5, 60, (20, 2))
+        # generate 20 sets of 2 floats between 0.25 and 6
+        all_scales = init_rng.uniform(0.25, 6, (20, 2))
+        # generate 20 lists length 23 containing lists length 2 which sum to 1
+        all_mix_weights = init_rng.dirichlet([0.5, 0.5], (20,23))
+
+        softinv_means = torch.tensor(all_means[init_idx]) + torch.log(-torch.expm1(torch.tensor(-all_means[init_idx])))
+        softinv_scales = torch.tensor(all_scales[init_idx]) - 0.2 + torch.log(-torch.expm1(torch.tensor(-all_scales[init_idx] + 0.2)))
+        mix_weights = torch.log(1e-13 + torch.tensor(all_mix_weights[init_idx]))
+        model.update_params(torch.cat([softinv_means, softinv_scales, mix_weights.view(-1)]))
+
     if initialization == 'bpr':
         means = torch.tensor([1, 10])
         softinv_means = means + torch.log(-torch.expm1(-means))
@@ -72,6 +87,7 @@ def main(step_size=None, epochs=None, bpr_weight=None,
         softinv_scales = scales - 0.2 + torch.log(-torch.expm1(-scales + 0.2))
         mix_weights = torch.log(1e-13 + torch.tensor(
                                         [[0.99,0.1]*20+[0.1,0.99]*3]))
+        model.update_params(torch.cat([softinv_means, softinv_scales, mix_weights.view(-1)]))
 
 
     optimizer = torch.optim.Adam(model.parameters(), lr=step_size)
@@ -88,14 +104,15 @@ def main(step_size=None, epochs=None, bpr_weight=None,
         bprs.append(bpr)
         nlls.append(nll)
     
-    # save everything to outdir
-    if not os.path.exists(outdir):
-        os.makedirs(outdir)
-    torch.save(model.state_dict(), f'{outdir}/model.pth')
-    torch.save(optimizer.state_dict(), f'{outdir}/optimizer.pth')
-    torch.save(losses, f'{outdir}/losses.pth')
-    torch.save(bprs, f'{outdir}/bprs.pth')
-    torch.save(nlls, f'{outdir}/nlls.pth')
+        # save everything to outdir every 50 epochs
+        if epoch % 50 == 0:
+            if not os.path.exists(outdir):
+                os.makedirs(outdir)
+            torch.save(model.state_dict(), f'{outdir}/model.pth')
+            torch.save(optimizer.state_dict(), f'{outdir}/optimizer.pth')
+            torch.save(losses, f'{outdir}/losses.pth')
+            torch.save(bprs, f'{outdir}/bprs.pth')
+            torch.save(nlls, f'{outdir}/nlls.pth')
 
 
 
@@ -113,6 +130,7 @@ if __name__ ==  "__main__":
     parser.add_argument("--num_components", type=int, default=4)
     parser.add_argument("--perturbed_noise", type=float, default=0.05)
     parser.add_argument("--initialization", type=str, required=False)
+    parser.add_argument("--init_idx", type=int, required=False)
     parser.add_argument("--mu1", type=int, required=False)
     parser.add_argument("--mu2", type=int, required=False)
 

@@ -7,7 +7,7 @@ def train_epoch(model, optimizer, K, threshold, train_T, M_score_func, M_action,
     mix_model = model()
     
     y_sample_TMS = mix_model.sample((train_T, M_score_func))
-    y_sample_action_TMS = mix_model.sample((train_T, M_action))
+    y_sample_action_TMS = y_sample_TMS # big mistake? mix_model.sample((train_T, M_action))
 
     ratio_rating_TMS = y_sample_action_TMS/y_sample_action_TMS.sum(dim=-1, keepdim=True)
     ratio_rating_TS =  ratio_rating_TMS.mean(dim=1)
@@ -26,11 +26,14 @@ def train_epoch(model, optimizer, K, threshold, train_T, M_score_func, M_action,
 
     # get gradient of negative bpr_t  with respect to ratio rating_TS
     positive_bpr_T = torch_bpr_uncurried(ratio_rating_TS, torch.tensor(train_y_TS), K=K, perturbed_top_K_func=perturbed_top_K_func)
-    bpr_threshold_diff_T = positive_bpr_T - threshold
-    violate_threshold_flag = bpr_threshold_diff_T < 0
-    negative_bpr_loss = torch.sum(-bpr_threshold_diff_T*violate_threshold_flag)
+    if nll_weight>0:
+        bpr_threshold_diff_T = positive_bpr_T - threshold
+        violate_threshold_flag = bpr_threshold_diff_T < 0
+        negative_bpr_loss = torch.mean(-bpr_threshold_diff_T*violate_threshold_flag)
+    else:
+        negative_bpr_loss = torch.mean(-positive_bpr_T)
     
-    nll = torch.sum(-mix_model.log_prob( torch.tensor(train_y_TS)))
+    nll = torch.mean(-mix_model.log_prob( torch.tensor(train_y_TS)))
 
     loss = bpr_weight*negative_bpr_loss + nll_weight*nll
     loss.backward()
