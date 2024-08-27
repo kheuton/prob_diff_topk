@@ -2,19 +2,20 @@ import os
 import subprocess
 
 
-bpr_weights = [1]
-nll_weights = [1]
-step_sizes = [0.1, 0.5, 0.001]
+bpr_weights = [0,30]
+nll_weights = [0,1]
+step_sizes = [0.1,]
 perturbed_noises = [0.05, 0.01]
 init_indices = range(20)
+thresholds = [0.5, 0.7, 0.8, 0.9, 1]
 #mus = [(10, 30), (10, 50), (30, 50)]
 
 code_dir = '/cluster/home/kheuto01/code/prob_diff_topk'
-epochs=1000
+epochs=2000
 num_components=2
 seeds=[360]
 
-base_dir = f'/cluster/tufts/hugheslab/kheuto01/didibreakitall_{epochs}_comp{num_components}/'
+base_dir = f'/cluster/tufts/hugheslab/kheuto01/new_data_{epochs}_comp{num_components}/'
 
 count = 0
 for bpr_weight in bpr_weights:
@@ -22,7 +23,7 @@ for bpr_weight in bpr_weights:
         if (bpr_weight == 0 and nll_weight == 0):
             continue
         for step_size in step_sizes:
-            #for threshold in thresholds:
+            for t, threshold in enumerate(thresholds):
                 for p, perturbed_noise in enumerate(perturbed_noises):
                     for init_idx in init_indices:
                         #for mu1, mu2 in mus:
@@ -30,9 +31,16 @@ for bpr_weight in bpr_weights:
                             outfolder = f'bw{bpr_weight}_nw{nll_weight}_ss{step_size}'
                             if bpr_weight != 0:
                                 outfolder += f'_sig{perturbed_noise}'
+                                if nll_weight != 0:
+                                    outfolder += f'_tr{threshold}'
                             else:
                                 # bpr weight is 0, skip if this is second noise
                                 if p > 0:
+                                    continue
+
+                            if bpr_weight ==0 or nll_weight == 0:
+                                # not hybrid models, skip threshold
+                                if t>0:
                                     continue
                             outfolder += f'_init{init_idx}'
 
@@ -45,7 +53,7 @@ for bpr_weight in bpr_weights:
                                         f"--nll_weight {nll_weight}",
                                         f"--init_idx {init_idx}",
                                         f"--outdir {outdir}",
-                                        #f"--threshold {threshold}",
+                                        f"--threshold {threshold}",
                                         f"--num_components {num_components}",
                                         f"--perturbed_noise {perturbed_noise}",
                                         ]
