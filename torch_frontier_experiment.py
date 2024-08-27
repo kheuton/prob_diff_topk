@@ -10,20 +10,37 @@ from torch_training import train_epoch
 def main(step_size=None, epochs=None, bpr_weight=None,
          nll_weight=None, seed=None, init_idx=None, outdir=None, threshold=None,
            num_components=None, perturbed_noise=None, initialization=None,
-           mu1=None, mu2=None):
+           mu1=None, mu2=None, data='new'):
 
-    # tracts/distributions
-    S=23
 
     # total timepoints
     T= 500
-    K=3
 
-    low_set_1_10 = [QuantizedNormal(10, 0.3) for _ in range(10)]
-    low_set_2_10 = [QuantizedNormal(30, 0.3) for _ in range(10)]
-    high_set_3 = [QuantizedNormal(50,3) for _ in range(3)]
+    if data=='old':
+        K=3
+        # tracts/distributions
+        S=23
 
-    dist_S = low_set_1_10 + low_set_2_10 + high_set_3
+        
+
+        low_set_1_10 = [QuantizedNormal(10, 0.3) for _ in range(10)]
+        low_set_2_10 = [QuantizedNormal(30, 0.3) for _ in range(10)]
+        high_set_3 = [QuantizedNormal(50,3) for _ in range(3)]
+
+        dist_S = low_set_1_10 + low_set_2_10 + high_set_3
+    else:
+        S=12
+
+        # total timepoints
+        T= 500
+        K=6
+
+        low_3 = [QuantizedNormal(10, 0.3) for _ in range(3)]
+        lowmid_3 = [QuantizedNormal(35, 0.3) for _ in range(3)]
+        highmid_3 = [QuantizedNormal(45, 0.3) for _ in range(3)]
+        high_3 = [QuantizedNormal(50,0.3) for _ in range(3)]
+
+        dist_S = low_3 + lowmid_3 + highmid_3 + high_3 
 
     train_y_TS = np.zeros((T, S))
     for s, dist in enumerate(dist_S):
@@ -38,8 +55,8 @@ def main(step_size=None, epochs=None, bpr_weight=None,
         all_means = init_rng.uniform(0.5, 60, (20, 2))
         # generate 20 sets of 2 floats between 0.25 and 6
         all_scales = init_rng.uniform(0.25, 6, (20, 2))
-        # generate 20 lists length 23 containing lists length 2 which sum to 1
-        all_mix_weights = init_rng.dirichlet([0.5, 0.5], (20,23))
+        # generate 20 lists length S containing lists length 2 which sum to 1
+        all_mix_weights = init_rng.dirichlet([0.5, 0.5], (20,S))
 
         softinv_means = torch.tensor(all_means[init_idx]) + torch.log(-torch.expm1(torch.tensor(-all_means[init_idx])))
         softinv_scales = torch.tensor(all_scales[init_idx]) - 0.2 + torch.log(-torch.expm1(torch.tensor(-all_scales[init_idx] + 0.2)))
@@ -104,8 +121,8 @@ def main(step_size=None, epochs=None, bpr_weight=None,
         bprs.append(bpr)
         nlls.append(nll)
     
-        # save everything to outdir every 50 epochs
-        if epoch % 50 == 0:
+        # save everything to outdir every 100 epochs
+        if epoch % 100 == 0:
             if not os.path.exists(outdir):
                 os.makedirs(outdir)
             torch.save(model.state_dict(), f'{outdir}/model.pth')
