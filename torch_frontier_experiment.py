@@ -64,11 +64,11 @@ def main(step_size=None, epochs=None, bpr_weight=None,
         # Reproducibly, randomly generate some numbers using a numpy rng
         init_rng = np.random.RandomState(1989)
         # generate 20 sets of 2 floats between 0.5 and 60
-        all_means = init_rng.uniform(8, 102, (20, 2))
+        all_means = init_rng.uniform(8, 102, (20, num_components))
         # generate 20 sets of 2 floats between 0.25 and 6
-        all_scales = init_rng.uniform(0.25, 8, (20, 2))
+        all_scales = init_rng.uniform(0.25, 8, (20, num_components))
         # generate 20 lists length S containing lists length 2 which sum to 1
-        all_mix_weights = init_rng.dirichlet([0.5, 0.5], (20,S))
+        all_mix_weights = init_rng.dirichlet([0.5]*num_components, (20,S))
 
         softinv_means = torch.tensor(all_means[init_idx]) + torch.log(-torch.expm1(torch.tensor(-all_means[init_idx])))
         softinv_scales = torch.tensor(all_scales[init_idx]) - 0.2 + torch.log(-torch.expm1(torch.tensor(-all_scales[init_idx] + 0.2)))
