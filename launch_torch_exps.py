@@ -7,12 +7,12 @@ nll_weights = [0,1]
 step_sizes = [0.1,]
 perturbed_noises = [0.05, 0.01]
 init_indices = range(20)
-thresholds = [0.5, 0.86, 0.91, 0.94, 1]
+thresholds = [0.5,  1]
 #mus = [(10, 30), (10, 50), (30, 50)]
 
 code_dir = '/cluster/home/kheuto01/code/prob_diff_topk'
 epochs=4000
-num_components=2
+num_components=7
 seeds=[360]
 
 base_dir = f'/cluster/tufts/hugheslab/kheuto01/frontier_{epochs}_comp{num_components}/'

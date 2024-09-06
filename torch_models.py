@@ -67,6 +67,7 @@ class SpatialWaves(nn.Module):
         self.low = low
         self.high = high
         self.num_waves = num_waves
+        self.arrival_speeds =nn.Parameter(torch.rand(num_waves), requires_grad=True)
         self.arrival_intercepts =nn.Parameter(torch.rand(num_waves), requires_grad=True)
         self.lat_coeff = nn.Parameter(torch.rand(num_waves), requires_grad=True)
         self.lon_coeff = nn.Parameter(torch.rand(num_waves), requires_grad=True)
@@ -79,20 +80,22 @@ class SpatialWaves(nn.Module):
         return torch.cat([param.view(-1) for param in self.parameters()])
 
     def single_tensor_to_params(self, single_tensor):
-        arrival_intercepts = single_tensor[:self.num_waves]
-        lat_coeff = single_tensor[self.num_waves:2*self.num_waves]
-        lon_coeff = single_tensor[2*self.num_waves:3*self.num_waves]
-        softplusinv_magnitudes = single_tensor[3*self.num_waves:4*self.num_waves]
-        softplusinv_peak_widths = single_tensor[4*self.num_waves:5*self.num_waves]
-        return arrival_intercepts, lat_coeff, lon_coeff, softplusinv_magnitudes, softplusinv_peak_widths
+        arrival_speeds = single_tensor[:self.num_waves]
+        arrival_intercepts = single_tensor[self.num_waves:2*self.num_waves]
+        lat_coeff = single_tensor[2*self.num_waves:3*self.num_waves]
+        lon_coeff = single_tensor[3*self.num_waves:4*self.num_waves]
+        softplusinv_magnitudes = single_tensor[4*self.num_waves:5*self.num_waves]
+        softplusinv_peak_widths = single_tensor[5*self.num_waves:6*self.num_waves]
+        return arrival_speeds, arrival_intercepts, lat_coeff, lon_coeff, softplusinv_magnitudes, softplusinv_peak_widths
     
     def update_params(self, single_tensor):
-        arrival_intercepts, lat_coeff, lon_coeff, softplusinv_magnitudes, softplusinv_peak_widths = self.single_tensor_to_params(single_tensor)
-        self.arrival_intercepts = arrival_intercepts
-        self.lat_coeff = lat_coeff
-        self.lon_coeff = lon_coeff
-        self.softplusinv_magnitudes = softplusinv_magnitudes
-        self.softplusinv_peak_widths = softplusinv_peak_widths
+        arrival_speeds, arrival_intercepts, lat_coeff, lon_coeff, softplusinv_magnitudes, softplusinv_peak_widths = self.single_tensor_to_params(single_tensor)
+        self.arrival_speeds.data = arrival_speeds
+        self.arrival_intercepts.data = arrival_intercepts
+        self.lat_coeff.data = lat_coeff
+        self.lon_coeff.data = lon_coeff
+        self.softplusinv_magnitudes.data = softplusinv_magnitudes
+        self.softplusinv_peak_widths.data = softplusinv_peak_widths
 
         return
     
@@ -102,13 +105,13 @@ class SpatialWaves(nn.Module):
         T = time_T.shape[0]
         W = self.num_waves
 
-        arrival_intercepts, lat_coeff, lon_coeff, softplusinv_magnitudes, softplusinv_peak_widths = self.single_tensor_to_params(single_tensor)
+        arrival_speeds, arrival_intercepts, lat_coeff, lon_coeff, softplusinv_magnitudes, softplusinv_peak_widths = self.single_tensor_to_params(single_tensor)
         magnitudes_W = torch.nn.functional.softplus(softplusinv_magnitudes)
         peak_widths_W = torch.nn.functional.softplus(softplusinv_peak_widths) + self.min_peak_width
         arrival_times_SW = arrival_intercepts.expand(S,W) +lat_S.unsqueeze(-1)*lat_coeff.expand(1,W) + lon_S.unsqueeze(-1)*lon_coeff.expand(1,W)
         
         # exponentiate time - arrival time / peak width
-        time_diff_TSW = time_T.unsqueeze(-1).unsqueeze(-1) - arrival_times_SW.expand(1,S,W)
+        time_diff_TSW = arrival_speeds.expand(1,1,W)*time_T.unsqueeze(-1).unsqueeze(-1) - arrival_times_SW.expand(1,S,W)
         # square time_diff/peak_width
         waves_TSW = magnitudes_W.expand(1,1,W)*torch.exp(-(time_diff_TSW/peak_widths_W.expand(1,1,W))**2)
         death_rate_TS = torch.sum(waves_TSW, dim=-1)
@@ -128,7 +131,7 @@ class SpatialWaves(nn.Module):
         arrival_times_SW = self.arrival_intercepts.expand(S,W) +lat_S.unsqueeze(-1)*self.lat_coeff.expand(1,W) + lon_S.unsqueeze(-1)*self.lon_coeff.expand(1,W)
         
         # exponentiate time - arrival time / peak width
-        time_diff_TSW = time_T.unsqueeze(-1).unsqueeze(-1) - arrival_times_SW.expand(1,S,W)
+        time_diff_TSW = self.arrival_speeds.expand(1,1,W)*time_T.unsqueeze(-1).unsqueeze(-1) - arrival_times_SW.expand(1,S,W)
         # square time_diff/peak_width
         waves_TSW = magnitudes_W.expand(1,1,W)*torch.exp(-(time_diff_TSW/peak_widths_W.expand(1,1,W))**2)
         death_rate_TS = torch.sum(waves_TSW, dim=-1)
