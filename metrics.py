@@ -4,6 +4,7 @@ from functools import partial
 import numpy as np
 import keras
 import tensorflow as tf
+import torch
 
 def mixture_poi_loss(y_true, y_pred):
     component_preds, mixture_weights = y_pred
@@ -50,6 +51,15 @@ def mixture_poisson_nll(y_true, y_pred, mixture_weights):
     expanded_true = tf.expand_dims(y_pred, axis=-1)
 
     return y_pred - expanded_true * tf.math.log(expanded_true + 1e-10)
+
+def top_k_onehot_indicator(x, k):
+
+    topk = torch.topk(x, k=k, dim=-1, sorted=False)
+    indices = topk.indices
+    # convert to k-hot indicator with onehot function
+    one_hot = torch.nn.functional.one_hot(indices, num_classes=x.shape[-1]).float()
+    #khot = torch.mean(one_hot, dim=-2)
+    return one_hot
 
 def top_k_idx(input_BD, **kwargs):
     _, idx_BD = tf.math.top_k(input_BD, **kwargs)
