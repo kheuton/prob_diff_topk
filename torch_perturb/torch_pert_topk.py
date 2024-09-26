@@ -2,10 +2,10 @@ import torch
 from torch import nn
 
 
-class PerturbedTopK(nn.Module):
+class PerturbedBrokenTopK(nn.Module):
 
     def __init__(self, k: int, num_samples: int = 500, sigma: float = 0.05):
-        super(PerturbedTopK, self).__init__()
+        super(PerturbedBrokenTopK, self).__init__()
     
         self.num_samples = num_samples
         self.sigma = sigma
@@ -14,10 +14,10 @@ class PerturbedTopK(nn.Module):
     def __call__(self, x):
         # Return the output of the PerturbedTopKFunction, applied to the input tensor
         # using the k, num_samples, and sigma attributes as arguments
-        return PerturbedTopKFunction.apply(x, self.k, self.num_samples, self.sigma)
+        return PerturbedBrokenTopKFunction.apply(x, self.k, self.num_samples, self.sigma)
 
 
-class PerturbedTopKFunction(torch.autograd.Function):
+class PerturbedBrokenTopKFunction(torch.autograd.Function):
     
     @staticmethod
     def forward(ctx, x, k: int, num_samples: int = 500, sigma: float = 0.05):

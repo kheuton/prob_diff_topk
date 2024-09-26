@@ -68,11 +68,12 @@ class SpatialWaves(nn.Module):
         self.high = high
         self.num_waves = num_waves
         self.arrival_speeds =nn.Parameter(torch.rand(num_waves), requires_grad=True)
-        self.arrival_intercepts =nn.Parameter(torch.rand(num_waves), requires_grad=True)
-        self.lat_coeff = nn.Parameter(torch.rand(num_waves), requires_grad=True)
-        self.lon_coeff = nn.Parameter(torch.rand(num_waves), requires_grad=True)
-        self.softplusinv_magnitudes = nn.Parameter(torch.rand(num_waves), requires_grad=True)
-        self.softplusinv_peak_widths = nn.Parameter(torch.rand(num_waves), requires_grad=True)
+        self.arrival_intercepts =nn.Parameter(torch.rand(num_waves)+12, requires_grad=True)
+        self.lat_coeff = nn.Parameter(-torch.rand(num_waves), requires_grad=True)
+        self.lon_coeff = nn.Parameter(-torch.rand(num_waves), requires_grad=True)
+        # magnitudes are random between -6 and -5
+        self.softplusinv_magnitudes = nn.Parameter(torch.rand(num_waves)-6.0, requires_grad=True)
+        self.softplusinv_peak_widths = nn.Parameter(torch.rand(num_waves)+2.0, requires_grad=True)
         self.min_peak_width=min_peak_width
         self.death_noise = death_noise
 
