@@ -20,8 +20,8 @@ def main(K=None,step_size=None, epochs=None, bpr_weight=None,
     rows=27
     cols=60
     data_shape=(rows, cols)
-    deaths = pd.read_csv(os.path.join(data_dir,'deaths_bandheavy.csv'))
-    pop = pd.read_csv(os.path.join(data_dir, 'pop_bandheavy.csv'))
+    deaths = pd.read_csv(os.path.join(data_dir,'deaths_bandheavysteep.csv'))
+    pop = pd.read_csv(os.path.join(data_dir, 'pop_bandheavysteep.csv'))
 
     # turn the death column into a time-by-geoid array
     deaths_TS = deaths.pivot(index='time', columns='geoid', values='death').values
@@ -43,8 +43,38 @@ def main(K=None,step_size=None, epochs=None, bpr_weight=None,
     S = pop_S.shape[0]
     T = time_T.shape[0]
 
+    num_waves = 1
+    model  = SpatialWaves(num_waves=num_waves, low=0, high=1000000)
+    if init_idx is not None:
+        # Reproducibly, randomly generate some numbers using a numpy rng
+        init_rng = np.random.RandomState(1989)
 
-    model  = SpatialWaves(num_waves=1,low=0, high=1000000)
+        true_intercept = lat_S.view(data_shape)[0,52]
+        all_intercepts = init_rng.uniform(low=true_intercept*0.9, high=true_intercept*1.1, size=(20, num_waves))
+
+        true_lat_coeff = -1
+        all_lat_coeffs = init_rng.uniform(low=true_lat_coeff*0.9, high=true_lat_coeff*1.1, size=(20, num_waves))
+
+        vertical_lon_coeff = 0
+        vert_lon_coeffs = init_rng.uniform(low=vertical_lon_coeff-0.1, high=vertical_lon_coeff+0.1, size=(10, num_waves))
+
+        pos_angle_lon_coeff = 0.5
+        pos_angle_lon_coeffs = init_rng.uniform(low=pos_angle_lon_coeff-0.1, high=pos_angle_lon_coeff+0.1, size=(5, num_waves))
+        neg_angle_lon_coeff = -0.5
+        neg_angle_lon_coeffs = init_rng.uniform(low=neg_angle_lon_coeff-0.1, high=neg_angle_lon_coeff+0.1, size=(5, num_waves))
+        all_lon_coeffs = np.concatenate([vert_lon_coeffs, pos_angle_lon_coeffs, neg_angle_lon_coeffs], axis=0)
+
+        all_softinv_mags = init_rng.uniform(low=-6.4, high=-5, size=(20, num_waves))
+        alL_softinv_widths = init_rng.uniform(low=1, high=4, size=(20, num_waves))
+
+        intercept = torch.tensor(all_intercepts[init_idx], dtype=torch.float32)
+        lat_coeff = torch.tensor(all_lat_coeffs[init_idx], dtype=torch.float32)
+        lon_coeffs = torch.tensor(all_lon_coeffs[init_idx], dtype=torch.float32)
+        softinv_mags = torch.tensor(all_softinv_mags[init_idx], dtype=torch.float32)
+        softinv_widths = torch.tensor(alL_softinv_widths[init_idx], dtype=torch.float32)
+        model.update_params(torch.cat([intercept, lat_coeff, lon_coeffs, softinv_mags, softinv_widths]))
+
+
 
     optimizer = torch.optim.Adam(model.parameters(), lr=step_size)
 
@@ -99,6 +129,7 @@ if __name__ ==  "__main__":
     parser.add_argument("--num_score_samples", type=int, required=False, default=50)
     parser.add_argument("--num_pert_samples", type=int, required=False, default=50)
     parser.add_argument("--data_dir", type=str, default='/cluster/home/kheuto01/code/prob_diff_topk')
+    parser.add_argument("--init_idx", type=int, required=False)
 
     args = parser.parse_args()
     # call main with args as keywrods
