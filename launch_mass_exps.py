@@ -1,25 +1,27 @@
 import os
 import subprocess
+import numpy as np
 
 # Hyperparameter configurations
 Ks = [100]  # Number of top locations to consider
 bpr_weights = [0, 30]  # Weights for BPR loss term
 nll_weights = [0, 1]  # Weights for negative log-likelihood term
-step_sizes = [0.0001]  # Learning rates
-perturbed_noises = [0.01]  # Noise levels for perturbed top-k
-thresholds = [1]  # BPR thresholds
-score_sample_sizes = [ 50]  # Number of samples for score estimation
-pert_sample_sizes = [ 50]  # Number of samples for perturbation
+step_sizes = np.logspace(-5, -1, 5)  # Learning rates
+perturbed_noises = np.logspace(-5, -1, 5)  # Noise levels for perturbation
+thresholds = [1, 0.6, 0.65, 0.7, 0.5]  # BPR thresholds
+score_sample_sizes = [100]  # Number of samples for score estimation
+pert_sample_sizes = [100]  # Number of samples for perturbation
 
 # Fixed parameters
 epochs = 8000
-seeds = [360]  # Multiple seeds for reproducibility
+seeds = [123]  # Multiple seeds for reproducibility
 code_dir = '/cluster/home/kheuto01/code/prob_diff_topk'
+data_dir = '/cluster/tufts/hugheslab/datasets/NSF_OD/cleaned/MA'
 
 count = 0
 for K in Ks:
     # Create base directory for this K value
-    base_dir = f'/cluster/tufts/hugheslab/kheuto01/bird_zero_rand_K{K}_{epochs}/'
+    base_dir = f'/cluster/tufts/hugheslab/kheuto01/opioid_grid_fix_grad/MA/'
     
     for bpr_weight in bpr_weights:
         for nll_weight in nll_weights:
@@ -65,7 +67,7 @@ for K in Ks:
                                         f"--num_score_samples {num_score_samples}",
                                         f"--num_pert_samples {num_pert_samples}",
                                         f"--perturbed_noise {perturbed_noise}",
-                                        f"--data_dir {code_dir}",
+                                        f"--data_dir {data_dir}",
                                         "--device cuda"
                                     ]
 
@@ -78,10 +80,7 @@ for K in Ks:
                                         
                                     # Launch the job using slurm
                                     command = f"code_dir={code_dir} args='{arg_cmd}' sbatch < /cluster/home/kheuto01/code/prob_diff_topk/run_neg_binom.slurm"
-                                    #subprocess.run(command, shell=True, check=True)
-                                    if count<1:
-                                        print(command)
-                                    break
+                                    subprocess.run(command, shell=True, check=True)
                                     count += 1
 
                                     

@@ -12,14 +12,14 @@ class NegativeBinomialRegressionModel(nn.Module):
         self.num_fixed_effects = num_fixed_effects
         self.low = low
         self.high = high
-
+        
         # Fixed effects
         self.beta_0 = nn.Parameter(torch.randn(1))
         self.beta = nn.Parameter(torch.randn(num_fixed_effects))
 
-        # Random effects
-        self.b_0 = torch.zeros(num_locations).to(device)
-        self.b_1 = torch.zeros(num_locations).to(device)
+        # Random effects - why is this not param?
+        self.b_0 = nn.Parameter(torch.zeros(num_locations).to(device))
+        self.b_1 = nn.Parameter(torch.zeros(num_locations).to(device))
 
         # Covariance matrix parameters
         self.log_sigma_0 = nn.Parameter(torch.randn(1))
@@ -133,6 +133,25 @@ class NegativeBinomialRegressionModel(nn.Module):
         plt.show()
         
         return ax
+    
+class NegativeBinomialDebug(NegativeBinomialRegressionModel):
+
+    def build_from_single_tensor(self, single_tensor, X, time):
+        beta_0, beta, b_0, b_1, log_sigma_0, log_sigma_1, rho, softinv_theta = self.single_tensor_to_params(single_tensor)
+        fixed_effects = beta_0 + torch.einsum('tli,i->tl', X, beta)
+        random_intercepts = b_0.expand(X.shape[0], -1)
+        random_slopes = b_1.expand(X.shape[0], -1)
+        
+        log_mu = fixed_effects + random_intercepts + random_slopes * time
+
+        # Use softplus to ensure mu is positive and grows more slowly
+        mu = nn.functional.softplus(log_mu)
+
+        # Calculate theta probability
+        theta = torch.nn.functional.softplus(softinv_theta)
+
+        
+        return NegativeBinomial(total_count=mu, probs=theta)
 
 class MixtureOfPoissonsModel(nn.Module):
     def __init__(self, num_components=4, S=12):

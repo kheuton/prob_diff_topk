@@ -8,7 +8,7 @@ import argparse
 from functools import partial
 from metrics import top_k_onehot_indicator
 from torch_perturb.perturbations import perturbed
-from torch_models import NegativeBinomialRegressionModel, torch_bpr_uncurried, deterministic_bpr
+from torch_models import NegativeBinomialDebug, torch_bpr_uncurried, deterministic_bpr
 
 
 def convert_df_to_3d_array(df):
@@ -166,12 +166,12 @@ def main(K=None, step_size=None, epochs=None, bpr_weight=None,
         np.random.seed(seed)
 
     # Load training data
-    train_X_df = pd.read_csv(os.path.join(data_dir, 'bird_train_x.csv'), index_col=[0,1])
-    train_Y_df = pd.read_csv(os.path.join(data_dir, 'bird_train_y.csv'), index_col=[0,1])
+    train_X_df = pd.read_csv(os.path.join(data_dir, 'train_x.csv'), index_col=[0,1])
+    train_Y_df = pd.read_csv(os.path.join(data_dir, 'train_y.csv'), index_col=[0,1])
     
     # Load validation data
-    val_X_df = pd.read_csv(os.path.join(data_dir, 'bird_valid_x.csv'), index_col=[0,1])
-    val_Y_df = pd.read_csv(os.path.join(data_dir, 'bird_valid_y.csv'), index_col=[0,1])
+    val_X_df = pd.read_csv(os.path.join(data_dir, 'valid_x.csv'), index_col=[0,1])
+    val_Y_df = pd.read_csv(os.path.join(data_dir, 'valid_y.csv'), index_col=[0,1])
     
     # Process training data
     train_X, geoids, timesteps = convert_df_to_3d_array(train_X_df)#.drop(columns='timestep.1'))
@@ -193,7 +193,7 @@ def main(K=None, step_size=None, epochs=None, bpr_weight=None,
     time_val = torch.tensor(val_time_arr, dtype=torch.float32).to(device)
 
     # Initialize model
-    model = NegativeBinomialRegressionModel(
+    model = NegativeBinomialDebug(
         num_locations=len(geoids),
         num_fixed_effects=train_X.shape[2], device=device
     ).to(device)
