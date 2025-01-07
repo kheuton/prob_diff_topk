@@ -6,9 +6,9 @@ import numpy as np
 Ks = [100]  # Number of top locations to consider
 bpr_weights = [0, 30]  # Weights for BPR loss term
 nll_weights = [0, 1]  # Weights for negative log-likelihood term
-step_sizes = np.logspace(-5, -1, 5)  # Learning rates
-perturbed_noises = np.logspace(-5, -1, 5)  # Noise levels for perturbation
-thresholds = [1, 0.6, 0.65, 0.7, 0.5]  # BPR thresholds
+step_sizes =[0.001]  # Learning rates
+perturbed_noises = [0.1]  # Noise levels for perturbation
+thresholds = [1, 0.7, 0.65,0.6]  # BPR thresholds
 score_sample_sizes = [100]  # Number of samples for score estimation
 pert_sample_sizes = [100]  # Number of samples for perturbation
 

@@ -27,7 +27,7 @@ class NegativeBinomialRegressionModel(nn.Module):
         self.rho = nn.Parameter(torch.randn(1))
 
         # probability param
-        self.softinv_theta = nn.Parameter(torch.randn(1))
+        self.siginv_theta = nn.Parameter(torch.randn(1))
 
     def forward(self, X, time):
         # Ensure X and time have the correct shape
@@ -46,11 +46,11 @@ class NegativeBinomialRegressionModel(nn.Module):
         mu = nn.functional.softplus(log_mu)
 
         # Calculate theta probability
-        theta = torch.nn.functional.softplus(self.softinv_theta)
+        theta = torch.nn.functional.sigmoid(self.siginv_theta)
 
         # Calculate logits instead of probabilities
         logits = torch.log(mu) - torch.log(theta)
-        print(f'unconstrained theta: {self.softinv_theta}')
+        print(f'unconstrained theta: {self.siginv_theta}')
         print(f'Theta: {theta}')
 
         # Create and return the NegativeBinomial distribution using logits
@@ -137,7 +137,7 @@ class NegativeBinomialRegressionModel(nn.Module):
 class NegativeBinomialDebug(NegativeBinomialRegressionModel):
 
     def build_from_single_tensor(self, single_tensor, X, time):
-        beta_0, beta, b_0, b_1, log_sigma_0, log_sigma_1, rho, softinv_theta = self.single_tensor_to_params(single_tensor)
+        beta_0, beta, b_0, b_1, log_sigma_0, log_sigma_1, rho, siginv_theta = self.single_tensor_to_params(single_tensor)
         fixed_effects = beta_0 + torch.einsum('tli,i->tl', X, beta)
         random_intercepts = b_0.expand(X.shape[0], -1)
         random_slopes = b_1.expand(X.shape[0], -1)
@@ -148,7 +148,7 @@ class NegativeBinomialDebug(NegativeBinomialRegressionModel):
         mu = nn.functional.softplus(log_mu)
 
         # Calculate theta probability
-        theta = torch.nn.functional.softplus(softinv_theta)
+        theta = torch.nn.functional.sigmoid(siginv_theta)
 
         
         return NegativeBinomial(total_count=mu, probs=theta)
