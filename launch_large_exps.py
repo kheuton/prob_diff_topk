@@ -12,7 +12,7 @@ thresholds = [1, 0.8]
 init_indices = range(20)
 #mus = [(10, 30), (10, 50), (30, 50)]
 
-code_dir = '/cluster/home/kheuto01/code/prob_diff_topk'
+code_dir = '/cluster/home/kheuto01/code/prob_diff_topk/'
 epochs=4000
 #num_components=7
 seeds=[360]

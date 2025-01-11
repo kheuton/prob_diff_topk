@@ -3,21 +3,22 @@ import subprocess
 
 
 bpr_weights = [0,30]
-nll_weights = [0,1]
+nll_weights = [1, 0]
 step_sizes = [0.1,]
 perturbed_noises = [0.05, 0.01]
 init_indices = range(20)
 thresholds = [0.5,  1]
 #mus = [(10, 30), (10, 50), (30, 50)]
 
-code_dir = '/cluster/home/kheuto01/code/prob_diff_topk'
+code_dir = '/cluster/home/fmuenc01/code/prob_diff_topk'
 epochs=4000
 num_components=7
 seeds=[360]
 
-base_dir = f'/cluster/tufts/hugheslab/kheuto01/frontier_{epochs}_comp{num_components}/'
+base_dir = f'/cluster/tufts/hugheslab/fmuenc01/frontier_{epochs}_comp{num_components}/'
 
 count = 0
+
 for bpr_weight in bpr_weights:
     for nll_weight in nll_weights:
         if (bpr_weight == 0 and nll_weight == 0):
@@ -65,9 +66,11 @@ for bpr_weight in bpr_weights:
                             if os.path.exists(os.path.join(outdir, 'report.png')):
                                 print(f"Skipping {outdir}")
                                 continue
-                            command = (f"code_dir={code_dir} args='{arg_cmd}' sbatch < /cluster/home/kheuto01/code/prob_diff_topk/run_exp.slurm")
+                            command = (f"code_dir={code_dir} args='{arg_cmd}' sbatch < /cluster/home/fmuenc01/code/prob_diff_topk/run_exp.slurm")
+                            print(command)
                             subprocess.run(command, shell=True, check=True)
                             count += 1
+                            sys.exit(0)
 
 
 print(count)

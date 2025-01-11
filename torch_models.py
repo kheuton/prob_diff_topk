@@ -36,25 +36,34 @@ class NegativeBinomialRegressionModel(nn.Module):
         assert time.shape == X.shape[:2], "time should have shape (num_time_points, num_locations)"
 
         # Calculate mu
+        print('BETA', self.beta_0)
+        print('DOES X HAVE NAN', torch.isnan(X).any())
         fixed_effects = self.beta_0 + torch.einsum('tli,i->tl', X, self.beta)
         random_intercepts = self.b_0.expand(X.shape[0], -1)
         random_slopes = self.b_1.expand(X.shape[0], -1)
-        
+
+        print('DOES FIXED EFFECTS HAVE NAN', torch.isnan(fixed_effects).any())
+
         log_mu = fixed_effects + random_intercepts + random_slopes * time
+
+        print('DOES LOG MU HAVE NAN', torch.isnan(log_mu).any())
 
         # Use softplus to ensure mu is positive and grows more slowly
         mu = nn.functional.softplus(log_mu)
 
-        # Calculate theta probability
-        theta = torch.nn.functional.softplus(self.softinv_theta)
-
+        # Calculate theta probability (SAMMY SWITCHED TODO TO SIGMOID)
+        theta = torch.sigmoid(self.softinv_theta)
+        #theta = torch.nn.functional.softplus(self.softinv_theta)
         # Calculate logits instead of probabilities
         logits = torch.log(mu) - torch.log(theta)
         print(f'unconstrained theta: {self.softinv_theta}')
         print(f'Theta: {theta}')
 
+        ### TODO GOT IT. WE HAVE LOCATIONS WITH ALL-ZERO.
         # Create and return the NegativeBinomial distribution using logits
         return NegativeBinomial(total_count=mu, probs=theta)
+
+
     def get_covariance_matrix(self):
         sigma_0 = torch.exp(self.log_sigma_0)
         sigma_1 = torch.exp(self.log_sigma_1)
