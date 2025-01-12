@@ -65,7 +65,7 @@ def evaluate_model(model, X, y, time, K, M_score_func, perturbed_top_K_func):
         
         # Sample and calculate ratio ratings
         y_sample_TMS = dist.sample((M_score_func,)).permute(1, 0, 2)
-        ratio_rating_TMS = y_sample_TMS/y_sample_TMS.sum(dim=-1, keepdim=True)
+        ratio_rating_TMS = y_sample_TMS/(1+y_sample_TMS.sum(dim=-1, keepdim=True))
         ratio_rating_TS = ratio_rating_TMS.mean(dim=1)
         
         # Calculate metrics
@@ -93,8 +93,10 @@ def train_epoch_neg_binom(model, optimizer, K, threshold,
     
     y_sample_TMS = dist.sample((M_score_func,)).permute(1, 0, 2)
     y_sample_action_TMS = y_sample_TMS
+    # add constant to prevent nan divison
+    action_denominator_TM = y_sample_action_TMS.sum(dim=-1, keepdim=True) + 1 
 
-    ratio_rating_TMS = y_sample_action_TMS/y_sample_action_TMS.sum(dim=-1, keepdim=True)
+    ratio_rating_TMS = y_sample_action_TMS/action_denominator_TM
     ratio_rating_TS = ratio_rating_TMS.mean(dim=1)
     ratio_rating_TS.requires_grad_(True)
 

@@ -6,11 +6,11 @@ import numpy as np
 Ks = [100]  # Number of top locations to consider
 bpr_weights = [0, 30]  # Weights for BPR loss term
 nll_weights = [0, 1]  # Weights for negative log-likelihood term
-step_sizes =[0.001]  # Learning rates
-perturbed_noises = [0.1]  # Noise levels for perturbation
-thresholds = [1, 0.7, 0.65,0.6]  # BPR thresholds
-score_sample_sizes = [100]  # Number of samples for score estimation
-pert_sample_sizes = [100]  # Number of samples for perturbation
+step_sizes =[0.001,0.01,0.0001]  # Learning rates
+perturbed_noises = [0.1,0.01,0.001]  # Noise levels for perturbation
+thresholds = [1, 0.7, 0.75,0.8,0.85]  # BPR thresholds
+score_sample_sizes = [100,200]  # Number of samples for score estimation
+pert_sample_sizes = [100,200]  # Number of samples for perturbation
 
 # Fixed parameters
 epochs = 8000
@@ -21,7 +21,7 @@ data_dir = '/cluster/tufts/hugheslab/datasets/NSF_OD/cleaned/MA'
 count = 0
 for K in Ks:
     # Create base directory for this K value
-    base_dir = f'/cluster/tufts/hugheslab/kheuto01/opioid_grid_fix_grad/MA/'
+    base_dir = f'/cluster/tufts/hugheslab/kheuto01/opioid_hpc_test_long/MA/'
     
     for bpr_weight in bpr_weights:
         for nll_weight in nll_weights:
