@@ -16,12 +16,12 @@ pert_sample_sizes = [100,200]  # Number of samples for perturbation
 epochs = 8000
 seeds = [123]  # Multiple seeds for reproducibility
 code_dir = '/cluster/home/kheuto01/code/prob_diff_topk'
-data_dir = '/cluster/tufts/hugheslab/datasets/NSF_OD/cleaned/MA'
+data_dir = '/cluster/tufts/hugheslab/datasets/NSF_OD/cleaned/long/MA'
 
 count = 0
 for K in Ks:
     # Create base directory for this K value
-    base_dir = f'/cluster/tufts/hugheslab/kheuto01/opioid_hpc_test_long/MA/'
+    base_dir = f'/cluster/tufts/hugheslab/kheuto01/opioid_hpc_test_long_big/MA/'
     
     for bpr_weight in bpr_weights:
         for nll_weight in nll_weights:

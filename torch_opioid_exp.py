@@ -89,58 +89,66 @@ def train_epoch_neg_binom(model, optimizer, K, threshold,
     """Train one epoch of the negative binomial model."""
     model.train()
     optimizer.zero_grad()
-    dist = model(feat_TSF, time_T)
     
-    y_sample_TMS = dist.sample((M_score_func,)).permute(1, 0, 2)
-    y_sample_action_TMS = y_sample_TMS
-    # add constant to prevent nan divison
-    action_denominator_TM = y_sample_action_TMS.sum(dim=-1, keepdim=True) + 1 
-
-    ratio_rating_TMS = y_sample_action_TMS/action_denominator_TM
-    ratio_rating_TS = ratio_rating_TMS.mean(dim=1)
-    ratio_rating_TS.requires_grad_(True)
-
-    def get_log_probs_baked(param):
-        distribution = model.build_from_single_tensor(param, feat_TSF, time_T)
-        log_probs_TMS = distribution.log_prob(y_sample_TMS.permute(1, 0, 2)).permute(1, 0, 2)
-        return log_probs_TMS
+    total_loss = 0
+    total_gradient_P = None
     
-    jac_TMSP = torch.autograd.functional.jacobian(get_log_probs_baked, 
-                                                (model.params_to_single_tensor()), 
-                                                strategy='forward-mode', 
-                                                vectorize=True)
+    for t in range(feat_TSF.shape[0]):
+        dist = model(feat_TSF[t:t+1], time_T[t:t+1])
+        
+        y_sample_TMS = dist.sample((M_score_func,)).permute(1, 0, 2)
+        y_sample_action_TMS = y_sample_TMS
+        action_denominator_TM = y_sample_action_TMS.sum(dim=-1, keepdim=True) + 1 
 
-    score_func_estimator_TMSP = jac_TMSP * ratio_rating_TMS.unsqueeze(-1)
-    score_func_estimator_TSP = score_func_estimator_TMSP.mean(dim=1)    
+        ratio_rating_TMS = y_sample_action_TMS / action_denominator_TM
+        ratio_rating_TS = ratio_rating_TMS.mean(dim=1)
+        ratio_rating_TS.requires_grad_(True)
 
-    positive_bpr_T = torch_bpr_uncurried(ratio_rating_TS, torch.tensor(train_y_TS), 
-                                        K=K, perturbed_top_K_func=perturbed_top_K_func)
-    
-    if nll_weight > 0:
-        bpr_threshold_diff_T = positive_bpr_T - threshold
-        violate_threshold_flag = bpr_threshold_diff_T < 0
-        negative_bpr_loss = torch.mean(-bpr_threshold_diff_T*violate_threshold_flag)
-    else:
-        negative_bpr_loss = torch.mean(-positive_bpr_T)
-    
-    nll = -model.log_likelihood(train_y_TS, feat_TSF, time_T)
-    loss = bpr_weight*negative_bpr_loss + nll_weight*nll
-    loss.backward()
+        def get_log_probs_baked(param):
+            distribution = model.build_from_single_tensor(param, feat_TSF[t:t+1], time_T[t:t+1])
+            log_probs_TMS = distribution.log_prob(y_sample_TMS.permute(1, 0, 2)).permute(1, 0, 2)
+            return log_probs_TMS
 
-    loss_grad_TS = ratio_rating_TS.grad
-    print(f'Params: {[param for param in model.parameters()]}')
-    print(f'Score func estimator: {score_func_estimator_TSP}')
-    print(f'Loss grad: {loss_grad_TS}')
+        jac_TMSP = torch.autograd.functional.jacobian(get_log_probs_baked, 
+                                                      (model.params_to_single_tensor()), 
+                                                      strategy='forward-mode', 
+                                                      vectorize=True)
 
-    gradient_TSP = score_func_estimator_TSP * torch.unsqueeze(loss_grad_TS, -1)
-    gradient_P = torch.sum(gradient_TSP, dim=[0,1])
-    gradient_tuple = model.single_tensor_to_params(gradient_P)
+        score_func_estimator_TMSP = jac_TMSP * ratio_rating_TMS.unsqueeze(-1)
+        score_func_estimator_TSP = score_func_estimator_TMSP.mean(dim=1)    
+
+        positive_bpr_T = torch_bpr_uncurried(ratio_rating_TS, torch.tensor(train_y_TS[t:t+1]), 
+                                             K=K, perturbed_top_K_func=perturbed_top_K_func)
+
+        if nll_weight > 0:
+            bpr_threshold_diff_T = positive_bpr_T - threshold
+            violate_threshold_flag = bpr_threshold_diff_T < 0
+            negative_bpr_loss = torch.mean(-bpr_threshold_diff_T * violate_threshold_flag)
+        else:
+            negative_bpr_loss = torch.mean(-positive_bpr_T)
+
+        nll = -model.log_likelihood(train_y_TS[t:t+1], feat_TSF[t:t+1], time_T[t:t+1])
+        loss = bpr_weight * negative_bpr_loss + nll_weight * nll
+        loss.backward()
+
+        loss_grad_TS = ratio_rating_TS.grad
+        gradient_TSP = score_func_estimator_TSP * torch.unsqueeze(loss_grad_TS, -1)
+        gradient_P = torch.sum(gradient_TSP, dim=[0, 1])
+        
+        if total_gradient_P is None:
+            total_gradient_P = gradient_P
+        else:
+            total_gradient_P += gradient_P
+        
+        total_loss += loss.item()
+
+    gradient_tuple = model.single_tensor_to_params(total_gradient_P)
 
     for param, gradient in zip(model.parameters(), gradient_tuple):
         if nll_weight > 0:
             gradient = gradient + param.grad
         param.grad = gradient
-        
+
     if update:
         optimizer.step()
 
@@ -148,7 +156,7 @@ def train_epoch_neg_binom(model, optimizer, K, threshold,
     det_bpr = torch.mean(deterministic_bpr_T)
 
     metrics = {
-        'loss': loss.detach().item(),
+        'loss': total_loss ,
         'deterministic_bpr': det_bpr.item(),
         'perturbed_bpr': torch.mean(positive_bpr_T).item(),
         'nll': nll.item()
