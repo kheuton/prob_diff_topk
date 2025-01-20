@@ -50,8 +50,6 @@ class NegativeBinomialRegressionModel(nn.Module):
 
         # Calculate logits instead of probabilities
         logits = torch.log(mu) - torch.log(theta)
-        print(f'unconstrained theta: {self.siginv_theta}')
-        print(f'Theta: {theta}')
 
         # Create and return the NegativeBinomial distribution using logits
         return NegativeBinomial(total_count=mu, probs=theta)

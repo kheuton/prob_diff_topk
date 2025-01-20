@@ -74,7 +74,7 @@ for K in Ks:
                                     arg_cmd = ' '.join(arg_parts)
                                     
                                     # Skip if experiment already completed
-                                    if os.path.exists(os.path.join(outdir, 'model.pth')):
+                                    if os.path.exists(os.path.join(outdir, 'best_model.pth')):
                                         print(f"Skipping completed experiment: {outdir}")
                                         continue
                                         
