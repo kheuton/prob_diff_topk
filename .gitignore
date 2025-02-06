@@ -160,4 +160,9 @@ cython_debug/
 #.idea/
 
 # data directory
-data_dir/*
+data_dir
+
+asurv_temp
+
+birds-data-cleaner/asurv_1950_to_2011/*
+birds-data-cleaner/data_dir

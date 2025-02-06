@@ -1,15 +1,14 @@
 #!/usr/bin/env bash
 #SBATCH -n 1               # Number of cores
-#SBATCH -t 10:00:00          # Runtime in D-HH:MM
-#SBATCH -p ccgpu           # Partition to submit to
+#SBATCH -N 1               # Ensure that all cores are on one machine
+#SBATCH -t 12:00:00          # Runtime in D-HH:MM
+#SBATCH -p gpu           # Partition to submit to
 #SBATCH --mem-per-cpu 64000  # Memory (in MB) per cpu
-#SBATCH -o /cluster/tufts/hugheslab/fmuenc01/prob_diff_topk/slurmlog/out/log_%j.out       # Write stdout to file named log_JOBIDNUM.out in log dir
-#SBATCH -e /cluster/tufts/hugheslab/fmuenc01/prob_diff_topk/slurmlog/err/log_%j.err       # Write stderr to file named log_JOBIDNUM.err in log dir
+#SBATCH -o /cluster/tufts/hugheslab/fmuenc01/slurmlog/out/log_%j.out       # Write stdout to file named log_JOBIDNUM.out in log dir
+#SBATCH -e /cluster/tufts/hugheslab/fmuenc01/slurmlog/err/log_%j.err       # Write stderr to file named log_JOBIDNUM.err in log dir
 #SBATCH --gres=gpu:a100:1
 #SBATCH --export=ALL        # Pass any exported env vars to this script and its children
-
-echo "Current working directory:"
-pwd
+#SBATCH --nodelist=s1cmp[001,003,004,005],p1cmp073,p1cmp111
 
 which python
 pwd
@@ -18,5 +17,4 @@ echo $PYTHONPATH
 echo "args:"
 echo $args
 
-
-python torch_opioid_exp.py $args
+python  torch_opioid_exp.py $args

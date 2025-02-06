@@ -8,7 +8,7 @@ import argparse
 from functools import partial
 from metrics import top_k_onehot_indicator
 from torch_perturb.perturbations import perturbed
-from torch_models import NegativeBinomialRegressionModel, torch_bpr_uncurried, deterministic_bpr
+from torch_models import NegativeBinomialDebug, torch_bpr_uncurried, deterministic_bpr
 
 
 def convert_df_to_3d_array(df):
@@ -61,23 +61,12 @@ def convert_y_df_to_2d_array(y_df, geoids, timesteps):
 
 def evaluate_model(model, X, y, time, K, M_score_func, perturbed_top_K_func):
     """Evaluate model on given data and return metrics."""
-    
-    print('If first read, this is the val sequence we want to check')
-    
     with torch.no_grad():
-        print('X array', X)
-        if torch.isnan(X).any():
-            print('CONTAINS NAN')
-        else:
-            print('DOES NOT CONTAIN NAN')
-        
-
         dist = model(X, time)
-
-
+        
         # Sample and calculate ratio ratings
         y_sample_TMS = dist.sample((M_score_func,)).permute(1, 0, 2)
-        ratio_rating_TMS = y_sample_TMS/y_sample_TMS.sum(dim=-1, keepdim=True)
+        ratio_rating_TMS = y_sample_TMS/(1+y_sample_TMS.sum(dim=-1, keepdim=True))
         ratio_rating_TS = ratio_rating_TMS.mean(dim=1)
         
         # Calculate metrics
@@ -100,96 +89,75 @@ def train_epoch_neg_binom(model, optimizer, K, threshold,
                          perturbed_top_K_func, bpr_weight, nll_weight, update=True):
     """Train one epoch of the negative binomial model."""
     model.train()
-    print('1: Beta after model.train() in loop', model.beta_0)
     optimizer.zero_grad()
-    print('2: Beta after optimizer zero grad in loop', model.beta_0)
-    dist = model(feat_TSF, time_T)
     
-    y_sample_TMS = dist.sample((M_score_func,)).permute(1, 0, 2)
-    y_sample_action_TMS = y_sample_TMS
+    total_loss = 0
+    total_gradient_P = None
     
-    print('3:', model.beta_0)
+    for t in range(feat_TSF.shape[0]):
+        dist = model(feat_TSF[t:t+1], time_T[t:t+1])
+        
+        y_sample_TMS = dist.sample((M_score_func,)).permute(1, 0, 2)
+        y_sample_action_TMS = y_sample_TMS
+        action_denominator_TM = y_sample_action_TMS.sum(dim=-1, keepdim=True) + 1 
 
-    ratio_rating_TMS = y_sample_action_TMS/y_sample_action_TMS.sum(dim=-1, keepdim=True)
-    ratio_rating_TS = ratio_rating_TMS.mean(dim=1)
-    ratio_rating_TS.requires_grad_(True)
+        ratio_rating_TMS = y_sample_action_TMS / action_denominator_TM
+        ratio_rating_TS = ratio_rating_TMS.mean(dim=1)
+        ratio_rating_TS.requires_grad_(True)
 
-    print('4:', model.beta_0)
+        def get_log_probs_baked(param):
+            distribution = model.build_from_single_tensor(param, feat_TSF[t:t+1], time_T[t:t+1])
+            log_probs_TMS = distribution.log_prob(y_sample_TMS.permute(1, 0, 2)).permute(1, 0, 2)
+            return log_probs_TMS
 
-    def get_log_probs_baked(param):
-        distribution = model.build_from_single_tensor(param, feat_TSF, time_T)
-        log_probs_TMS = distribution.log_prob(y_sample_TMS.permute(1, 0, 2)).permute(1, 0, 2)
-        return log_probs_TMS
-    
-    jac_TMSP = torch.autograd.functional.jacobian(get_log_probs_baked, 
-                                                (model.params_to_single_tensor()), 
-                                                strategy='forward-mode', 
-                                                vectorize=True)
+        jac_TMSP = torch.autograd.functional.jacobian(get_log_probs_baked, 
+                                                      (model.params_to_single_tensor()), 
+                                                      strategy='forward-mode', 
+                                                      vectorize=True)
 
-    print('5:', model.beta_0)
+        score_func_estimator_TMSP = jac_TMSP * ratio_rating_TMS.unsqueeze(-1)
+        score_func_estimator_TSP = score_func_estimator_TMSP.mean(dim=1)    
 
-    score_func_estimator_TMSP = jac_TMSP * ratio_rating_TMS.unsqueeze(-1)
-    score_func_estimator_TSP = score_func_estimator_TMSP.mean(dim=1)    
+        positive_bpr_T = torch_bpr_uncurried(ratio_rating_TS, torch.tensor(train_y_TS[t:t+1]), 
+                                             K=K, perturbed_top_K_func=perturbed_top_K_func)
 
-    print('6:', model.beta_0)
+        if nll_weight > 0:
+            bpr_threshold_diff_T = positive_bpr_T - threshold
+            violate_threshold_flag = bpr_threshold_diff_T < 0
+            negative_bpr_loss = torch.mean(-bpr_threshold_diff_T * violate_threshold_flag)
+        else:
+            negative_bpr_loss = torch.mean(-positive_bpr_T)
 
-    positive_bpr_T = torch_bpr_uncurried(ratio_rating_TS, torch.tensor(train_y_TS), 
-                                        K=K, perturbed_top_K_func=perturbed_top_K_func)
-    
-    print('7:', model.beta_0)
+        nll = -model.log_likelihood(train_y_TS[t:t+1], feat_TSF[t:t+1], time_T[t:t+1])
+        loss = bpr_weight * negative_bpr_loss + nll_weight * nll
+        loss.backward()
 
-    if nll_weight > 0:
-        bpr_threshold_diff_T = positive_bpr_T - threshold
-        violate_threshold_flag = bpr_threshold_diff_T < 0
-        negative_bpr_loss = torch.mean(-bpr_threshold_diff_T*violate_threshold_flag)
-    else:
-        negative_bpr_loss = torch.mean(-positive_bpr_T)
+        loss_grad_TS = ratio_rating_TS.grad
+        gradient_TSP = score_func_estimator_TSP * torch.unsqueeze(loss_grad_TS, -1)
+        gradient_P = torch.sum(gradient_TSP, dim=[0, 1])
+        
+        if total_gradient_P is None:
+            total_gradient_P = gradient_P
+        else:
+            total_gradient_P += gradient_P
+        
+        total_loss += loss.item()
 
-    print('8:', model.beta_0)
-
-    
-    nll = -model.log_likelihood(train_y_TS, feat_TSF, time_T)
-    loss = bpr_weight*negative_bpr_loss + nll_weight*nll
-    loss.backward()
-
-    print('9:', model.beta_0)
-
-    loss_grad_TS = ratio_rating_TS.grad
-    print(f'Params: {[param for param in model.parameters()]}')
-    print(f'Score func estimator: {score_func_estimator_TSP}')
-    print(f'Loss grad: {loss_grad_TS}')
-    print(f"Best Loss: {loss.item()}")
-
-    gradient_TSP = score_func_estimator_TSP * torch.unsqueeze(loss_grad_TS, -1)
-    gradient_P = torch.sum(gradient_TSP, dim=[0,1])
-    gradient_tuple = model.single_tensor_to_params(gradient_P)
-
-    print('10 beta:', model.beta_0)
-    print(f"Best Loss: {loss.item()}")
+    gradient_tuple = model.single_tensor_to_params(total_gradient_P)
 
     for param, gradient in zip(model.parameters(), gradient_tuple):
         if nll_weight > 0:
             gradient = gradient + param.grad
         param.grad = gradient
 
-    print(f"Grad of beta_0 before step: {self.beta_0.grad}")
-        
     if update:
         optimizer.step()
-    
-    # chat debugging
-    for name, param in model.named_parameters():
-        if torch.isnan(param).any():
-            print(f"NaN detected in parameter: {name}")
-        if torch.isinf(param).any():
-            print(f"Inf detected in parameter: {name}")
 
-    #print('11: (optimizer step)', model.beta_0)
     deterministic_bpr_T = deterministic_bpr(ratio_rating_TS, torch.tensor(train_y_TS), K=K)
     det_bpr = torch.mean(deterministic_bpr_T)
 
     metrics = {
-        'loss': loss.detach().item(),
+        'loss': total_loss ,
         'deterministic_bpr': det_bpr.item(),
         'perturbed_bpr': torch.mean(positive_bpr_T).item(),
         'nll': nll.item()
@@ -209,24 +177,12 @@ def main(K=None, step_size=None, epochs=None, bpr_weight=None,
         np.random.seed(seed)
 
     # Load training data
-    try:
-        train_X_df = pd.read_csv(os.path.join(data_dir, 'bird_train_x.csv'), index_col=[0,1])
-        train_Y_df = pd.read_csv(os.path.join(data_dir, 'bird_train_y.csv'), index_col=[0,1])
-    except FileNotFoundError:
-        print(f"Did not find file: {os.path.join(data_dir, 'bird_train_x.csv')}")
-        sys.exit(1)
-
+    train_X_df = pd.read_csv(os.path.join(data_dir, 'bird_train_x.csv'), index_col=[0,1])
+    train_Y_df = pd.read_csv(os.path.join(data_dir, 'bird_train_y.csv'), index_col=[0,1])
     
     # Load validation data
-    try:
-        # TODO check here
-        val_X_df = pd.read_csv(os.path.join(data_dir, 'bird_valid_x.csv'), index_col=[0,1])
-        val_Y_df = pd.read_csv(os.path.join(data_dir, 'bird_valid_y.csv'), index_col=[0,1])
-    except FileNotFoundError:
-        print("Did not find val file")
-        sys.exit(1)
-
-    
+    val_X_df = pd.read_csv(os.path.join(data_dir, 'bird_valid_x.csv'), index_col=[0,1])
+    val_Y_df = pd.read_csv(os.path.join(data_dir, 'bird_valid_y.csv'), index_col=[0,1])
     
     # Process training data
     train_X, geoids, timesteps = convert_df_to_3d_array(train_X_df)#.drop(columns='timestep.1'))
@@ -234,8 +190,7 @@ def main(K=None, step_size=None, epochs=None, bpr_weight=None,
     train_y = convert_y_df_to_2d_array(train_Y_df, geoids, timesteps)
 
     # Process validation data
-    # TODO check here
-    val_X, _, val_timesteps = convert_df_to_3d_array(val_X_df)
+    val_X, _, val_timesteps = convert_df_to_3d_array(val_X_df)#.drop(columns='timestep.1'))
     val_time_arr = np.array([val_timesteps] * len(geoids)).T
     val_y = convert_y_df_to_2d_array(val_Y_df, geoids, val_timesteps)
 
@@ -244,18 +199,15 @@ def main(K=None, step_size=None, epochs=None, bpr_weight=None,
     y_train = torch.tensor(train_y, dtype=torch.float32).to(device)
     time_train = torch.tensor(train_time_arr, dtype=torch.float32).to(device)
     
-    # TODO check here
     X_val = torch.tensor(val_X, dtype=torch.float32).to(device)
     y_val = torch.tensor(val_y, dtype=torch.float32).to(device)
     time_val = torch.tensor(val_time_arr, dtype=torch.float32).to(device)
 
     # Initialize model
-    model = NegativeBinomialRegressionModel(
+    model = NegativeBinomialDebug(
         num_locations=len(geoids),
         num_fixed_effects=train_X.shape[2], device=device
     ).to(device)
-
-    print('Beta after model initialization', model.beta_0)
 
     # Setup optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=step_size)
@@ -297,8 +249,6 @@ def main(K=None, step_size=None, epochs=None, bpr_weight=None,
             bpr_weight, nll_weight, device
         )
         
-        print('Beta after model training', model.beta_0)
-        
         # Update training metrics
         metrics['train']['epochs'].append(epoch)
         for metric, value in train_metrics.items():
@@ -307,7 +257,6 @@ def main(K=None, step_size=None, epochs=None, bpr_weight=None,
         # Validation step (every val_freq epochs)
         if epoch % val_freq == 0:
             model.eval()
-            print('Beta after model.eval', model.beta_0)
             val_metrics = evaluate_model(
                 model, X_val, y_val, time_val,
                 K, num_score_samples, perturbed_top_K_func
@@ -363,7 +312,7 @@ def main(K=None, step_size=None, epochs=None, bpr_weight=None,
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--K", type=int, default=50)
+    parser.add_argument("--K", type=int, default=100)
     parser.add_argument("--step_size", type=float, default=0.001)
     parser.add_argument("--epochs", type=int, default=1000)
     parser.add_argument("--bpr_weight", type=float, default=1.0)
@@ -378,6 +327,6 @@ if __name__ == "__main__":
     parser.add_argument("--device", type=str, default='cuda')
     parser.add_argument("--val_freq", type=int, default=10)
     
+    print("MADE IT TO OPIOID EXP")
     args = parser.parse_args()
-    print(args.data_dir)
     main(**vars(args))

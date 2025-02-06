@@ -12,14 +12,14 @@ class NegativeBinomialRegressionModel(nn.Module):
         self.num_fixed_effects = num_fixed_effects
         self.low = low
         self.high = high
-
+        
         # Fixed effects
         self.beta_0 = nn.Parameter(torch.randn(1))
         self.beta = nn.Parameter(torch.randn(num_fixed_effects))
 
-        # Random effects
-        self.b_0 = torch.zeros(num_locations).to(device)
-        self.b_1 = torch.zeros(num_locations).to(device)
+        # Random effects - why is this not param?
+        self.b_0 = nn.Parameter(torch.zeros(num_locations).to(device))
+        self.b_1 = nn.Parameter(torch.zeros(num_locations).to(device))
 
         # Covariance matrix parameters
         self.log_sigma_0 = nn.Parameter(torch.randn(1))
@@ -27,7 +27,7 @@ class NegativeBinomialRegressionModel(nn.Module):
         self.rho = nn.Parameter(torch.randn(1))
 
         # probability param
-        self.softinv_theta = nn.Parameter(torch.randn(1))
+        self.siginv_theta = nn.Parameter(torch.randn(1))
 
     def forward(self, X, time):
         # Ensure X and time have the correct shape
@@ -36,34 +36,25 @@ class NegativeBinomialRegressionModel(nn.Module):
         assert time.shape == X.shape[:2], "time should have shape (num_time_points, num_locations)"
 
         # Calculate mu
-        print('BETA', self.beta_0)
-        print('DOES X HAVE NAN', torch.isnan(X).any())
         fixed_effects = self.beta_0 + torch.einsum('tli,i->tl', X, self.beta)
         random_intercepts = self.b_0.expand(X.shape[0], -1)
         random_slopes = self.b_1.expand(X.shape[0], -1)
-
-        print('DOES FIXED EFFECTS HAVE NAN', torch.isnan(fixed_effects).any())
-
+        
         log_mu = fixed_effects + random_intercepts + random_slopes * time
-
-        print('DOES LOG MU HAVE NAN', torch.isnan(log_mu).any())
 
         # Use softplus to ensure mu is positive and grows more slowly
         mu = nn.functional.softplus(log_mu)
 
-        # Calculate theta probability (SAMMY SWITCHED TODO TO SIGMOID)
-        theta = torch.sigmoid(self.softinv_theta)
-        #theta = torch.nn.functional.softplus(self.softinv_theta)
+        # Calculate theta probability
+        theta = torch.nn.functional.sigmoid(self.siginv_theta)
+
         # Calculate logits instead of probabilities
         logits = torch.log(mu) - torch.log(theta)
-        print(f'unconstrained theta: {self.softinv_theta}')
+        print(f'unconstrained theta: {self.siginv_theta}')
         print(f'Theta: {theta}')
 
-        ### TODO GOT IT. WE HAVE LOCATIONS WITH ALL-ZERO.
         # Create and return the NegativeBinomial distribution using logits
         return NegativeBinomial(total_count=mu, probs=theta)
-
-
     def get_covariance_matrix(self):
         sigma_0 = torch.exp(self.log_sigma_0)
         sigma_1 = torch.exp(self.log_sigma_1)
@@ -142,6 +133,28 @@ class NegativeBinomialRegressionModel(nn.Module):
         plt.show()
         
         return ax
+    
+class NegativeBinomialDebug(NegativeBinomialRegressionModel):
+
+    def build_from_single_tensor(self, single_tensor, X, time):
+        beta_0, beta, b_0, b_1, log_sigma_0, log_sigma_1, rho, siginv_theta = self.single_tensor_to_params(single_tensor)
+        #print(f"beta_0: {beta_0}")        
+        #print(f"Gradients for beta_0: {beta_0.grad}")
+        fixed_effects = beta_0 + torch.einsum('tli,i->tl', X, beta)
+        #print(f"fixed effects: {fixed_effects}")
+        random_intercepts = b_0.expand(X.shape[0], -1)
+        random_slopes = b_1.expand(X.shape[0], -1)
+        
+        log_mu = fixed_effects + random_intercepts + random_slopes * time
+
+        # Use softplus to ensure mu is positive and grows more slowly
+        mu = nn.functional.softplus(log_mu)
+
+        # Calculate theta probability
+        theta = torch.nn.functional.sigmoid(siginv_theta)
+
+        
+        return NegativeBinomial(total_count=mu, probs=theta)
 
 class MixtureOfPoissonsModel(nn.Module):
     def __init__(self, num_components=4, S=12):
