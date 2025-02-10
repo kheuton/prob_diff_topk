@@ -20,7 +20,8 @@ Try adjusting epsilon to encourage the model to achieve different BPRs. The mode
 ## Opioid-related Overdose Experiment
 We share the publically available Cook County Dataset, preprocessed to fit our modeling strategy. Our experiments can be run with commands like the following:
 
-```python torch_opioid_exp.py --step_size 0.1 \
+```
+python torch_opioid_exp.py --step_size 0.1 \
     --perturbed_noise 0.01 \
     --epochs 20 \
     --bpr_weight 30 \
