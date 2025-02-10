@@ -3,56 +3,32 @@ import torch
 import numpy as np
 
 from distributions import QuantizedNormal
-from torch_models import  MixtureOfTruncNormModel, torch_bpr_uncurried, deterministic_bpr
-from torch_perturb.torch_pert_topk import PerturbedTopK
+from torch_models import  MixtureOfTruncNormModel
+#from torch_perturb.torch_pert_topk import PerturbedTopK
+from torch_perturb.perturbations import perturbed
+from functools import partial
+from metrics import top_k_onehot_indicator
 from torch_training import train_epoch
 
 def main(step_size=None, epochs=None, bpr_weight=None,
-         nll_weight=None, seed=None, init_idx=None, outdir=None, threshold=None,
-           num_components=None, perturbed_noise=None, initialization=None,
-           mu1=None, mu2=None, data='new'):
+         nll_weight=None, seed=None, init_idx=None, outdir=None, epsilon=None,
+           num_components=None, perturbed_noise=None, initialization=None):
 
 
     # total timepoints
     T= 500
+    S=7
+    K=5
+    device = 'cpu'
 
-    if data=='old':
-        K=3
-        # tracts/distributions
-        S=23
+    dist_S = [QuantizedNormal(10, 0.3),
+            QuantizedNormal(20, 0.3),
+            QuantizedNormal(30, 0.3),
+            QuantizedNormal(40, 0.3),
+            QuantizedNormal(50, 0.3),
+            QuantizedNormal(60, 0.3),
+            QuantizedNormal(100, 0.3)]
 
-        
-
-        low_set_1_10 = [QuantizedNormal(10, 0.3) for _ in range(10)]
-        low_set_2_10 = [QuantizedNormal(30, 0.3) for _ in range(10)]
-        high_set_3 = [QuantizedNormal(50,3) for _ in range(3)]
-
-        dist_S = low_set_1_10 + low_set_2_10 + high_set_3
-    elif data=='frontier':
-        S=7
-        K=5
-
-        dist_S = [QuantizedNormal(10, 0.3),
-                QuantizedNormal(20, 0.3),
-                QuantizedNormal(30, 0.3),
-                QuantizedNormal(40, 0.3),
-                QuantizedNormal(50, 0.3),
-                QuantizedNormal(60, 0.3),
-                QuantizedNormal(100, 0.3)]
-
-    else:
-        S=12
-
-        # total timepoints
-        T= 500
-        K=6
-
-        low_3 = [QuantizedNormal(10, 0.3) for _ in range(3)]
-        lowmid_3 = [QuantizedNormal(35, 0.3) for _ in range(3)]
-        highmid_3 = [QuantizedNormal(45, 0.3) for _ in range(3)]
-        high_3 = [QuantizedNormal(50,0.3) for _ in range(3)]
-
-        dist_S = low_3 + lowmid_3 + highmid_3 + high_3 
 
     train_y_TS = np.zeros((T, S))
     for s, dist in enumerate(dist_S):
@@ -60,6 +36,7 @@ def main(step_size=None, epochs=None, bpr_weight=None,
         train_y_TS[:, s] = dist.rvs(size=T, random_state=random_state)
 
     model = MixtureOfTruncNormModel(num_components=num_components, S=S, low=0, high=150)
+
     if init_idx is not None:
         # Reproducibly, randomly generate some numbers using a numpy rng
         init_rng = np.random.RandomState(1989)
@@ -92,31 +69,10 @@ def main(step_size=None, epochs=None, bpr_weight=None,
                                         [[1,0]*10+[0,1]*13]))
         model.update_params(torch.cat([softinv_means, softinv_scales, mix_weights.view(-1)]))
 
-    if mu1 == 10:
-        if mu2 == 30:
-            means = torch.tensor([10, 30])
-            softinv_means = means + torch.log(-torch.expm1(-means))
-            scales = torch.tensor([1, 1])
-            softinv_scales = scales - 0.2 + torch.log(-torch.expm1(-scales + 0.2)) 
-            mix_weights = torch.log(1e-13 + torch.tensor(
-                                            [[0.99,0.1]*10+[0.1,0.99]*13]))
-            model.update_params(torch.cat([softinv_means, softinv_scales, mix_weights.view(-1)]))
-        elif mu2 == 50:
-            means = torch.tensor([10, 50])
-            softinv_means = means + torch.log(-torch.expm1(-means))
-            scales = torch.tensor([1, 1])
-            softinv_scales = scales - 0.2 + torch.log(-torch.expm1(-scales + 0.2)) 
-            mix_weights = torch.log(1e-13 + torch.tensor(
-                                            [[0.99,0.1]*10 + [0.5, 0.5]*10 + [0.1,0.99]*3]))
-            model.update_params(torch.cat([softinv_means, softinv_scales, mix_weights.view(-1)]))
-    elif mu1 == 30:
-        means = torch.tensor([30, 50])
-        softinv_means = means + torch.log(-torch.expm1(-means))
-        scales = torch.tensor([1, 1])
-        softinv_scales = scales - 0.2 + torch.log(-torch.expm1(-scales + 0.2))
-        mix_weights = torch.log(1e-13 + torch.tensor(
-                                        [[0.99,0.1]*20+[0.1,0.99]*3]))
-        model.update_params(torch.cat([softinv_means, softinv_scales, mix_weights.view(-1)]))
+
+    model.to(device)
+    model.float()
+    
 
 
     optimizer = torch.optim.Adam(model.parameters(), lr=step_size)
@@ -124,11 +80,14 @@ def main(step_size=None, epochs=None, bpr_weight=None,
     M_score_func =  100
     M_action = 100
     train_T = train_y_TS.shape[0]
-    perturbed_top_K_func = PerturbedTopK(k=K, sigma=perturbed_noise)
+    #perturbed_top_K_func = PerturbedTopK(k=K, sigma=perturbed_noise)
+     # Setup top-k function
+    top_k_func = partial(top_k_onehot_indicator, k=K)
+    perturbed_top_K_func = perturbed(top_k_func, sigma=perturbed_noise, num_samples=M_action, device=device)
     losses, bprs, nlls = [], [], []
     for epoch in range(epochs):
         print(f'EPOCH: {epoch}')
-        loss, bpr, nll, model = train_epoch(model, optimizer, K, threshold, train_T, M_score_func, M_action, train_y_TS, perturbed_top_K_func, bpr_weight, nll_weight)
+        loss, bpr, nll, model = train_epoch(model, optimizer, K, epsilon, train_T, M_score_func, M_action, train_y_TS, perturbed_top_K_func, bpr_weight, nll_weight)
         losses.append(loss)
         bprs.append(bpr)
         nlls.append(nll)
@@ -144,8 +103,6 @@ def main(step_size=None, epochs=None, bpr_weight=None,
             torch.save(nlls, f'{outdir}/nlls.pth')
 
 
-
-
 if __name__ ==  "__main__":
     import argparse
     parser = argparse.ArgumentParser()
@@ -155,14 +112,11 @@ if __name__ ==  "__main__":
     parser.add_argument("--nll_weight", type=float, default=1.0)
     parser.add_argument("--seed", type=int, default=360)
     parser.add_argument("--outdir", type=str, required=True)
-    parser.add_argument("--threshold", type=float, default=0.55)
+    parser.add_argument("--epsilon", type=float, default=0.55)
     parser.add_argument("--num_components", type=int, default=4)
     parser.add_argument("--perturbed_noise", type=float, default=0.05)
     parser.add_argument("--initialization", type=str, required=False)
     parser.add_argument("--init_idx", type=int, required=False)
-    parser.add_argument("--mu1", type=int, required=False)
-    parser.add_argument("--mu2", type=int, required=False)
-    parser.add_argument("--data", type=str, default='old')
 
     args = parser.parse_args()
     # call main with args as keywrods

@@ -82,7 +82,7 @@ def evaluate_model(model, X, y, time, K, M_score_func, perturbed_top_K_func):
         
         return metrics
 
-def train_epoch_neg_binom(model, optimizer, K, threshold,
+def train_epoch_neg_binom(model, optimizer, K, epsilon,
                          M_score_func, feat_TSF,
                          time_T, train_y_TS,
                          perturbed_top_K_func, bpr_weight, nll_weight, update=True):
@@ -121,7 +121,7 @@ def train_epoch_neg_binom(model, optimizer, K, threshold,
                                              K=K, perturbed_top_K_func=perturbed_top_K_func)
 
         if nll_weight > 0:
-            bpr_threshold_diff_T = positive_bpr_T - threshold
+            bpr_threshold_diff_T = positive_bpr_T - epsilon
             violate_threshold_flag = bpr_threshold_diff_T < 0
             negative_bpr_loss = torch.mean(-bpr_threshold_diff_T * violate_threshold_flag)
         else:
@@ -165,7 +165,7 @@ def train_epoch_neg_binom(model, optimizer, K, threshold,
     return metrics, model
 
 def main(K=None, step_size=None, epochs=None, bpr_weight=None,
-         nll_weight=None, seed=None, outdir=None, threshold=None,
+         nll_weight=None, seed=None, outdir=None, epsilon=None,
          perturbed_noise=None, num_score_samples=None, num_pert_samples=None,
          data_dir=None, device='cuda', val_freq=10):
     """Main training loop with command line arguments."""
@@ -242,7 +242,7 @@ def main(K=None, step_size=None, epochs=None, bpr_weight=None,
         
         # Training step
         train_metrics, model = train_epoch_neg_binom(
-            model, optimizer, K, threshold,
+            model, optimizer, K, epsilon,
             num_score_samples, X_train, time_train,
             y_train, perturbed_top_K_func,
             bpr_weight, nll_weight, device
@@ -318,7 +318,7 @@ if __name__ == "__main__":
     parser.add_argument("--nll_weight", type=float, default=1.0)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--outdir", type=str, required=True)
-    parser.add_argument("--threshold", type=float, default=0.55)
+    parser.add_argument("--epsilon", type=float, default=0.55)
     parser.add_argument("--perturbed_noise", type=float, default=0.01)
     parser.add_argument("--num_score_samples", type=int, default=20)
     parser.add_argument("--num_pert_samples", type=int, default=50)

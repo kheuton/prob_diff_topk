@@ -42,18 +42,6 @@ class MixtureModel(scipy.stats.rv_continuous):
         rvs = np.choose(submodel_choices, submodel_samples)
         return rvs
 
-class ZeroInflatedDist(object):
-    
-    def __init__(self, dist, zero_proba):
-        self.dist = dist
-        self.zero_proba = float(zero_proba)
-        
-    def rvs(self, size=1, random_state=np.random):
-        vals = np.atleast_1d(np.round(self.dist.rvs(size=size, random_state=random_state)))
-        zmask = random_state.rand(size) < self.zero_proba
-        vals[zmask] = 0
-        return np.maximum(0, vals)
-    
 
 class QuantizedDist(scipy.stats.rv_continuous):
     

@@ -1,0 +1,24 @@
+name: pip_k3
+channels:
+  - conda-forge
+dependencies:
+  - pip
+  - python[version='<3.12']
+  - ffmpeg
+  - ca-certificates
+  - openssl
+prefix: /cluster/tufts/hugheslab/kheuto01/mambaforge/envs/pip_k3
+  - pip:
+    - geopandas
+    - ipython
+    - jupyter
+    - keras
+    - numpy
+    - pandas
+    - scipy
+    - seaborn
+    - shapely
+    - six
+    - torch
+    - torchaudio
+    - torchvision
