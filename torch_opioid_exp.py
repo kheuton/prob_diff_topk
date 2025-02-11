@@ -8,7 +8,7 @@ import argparse
 from functools import partial
 from metrics import top_k_onehot_indicator
 from torch_perturb.perturbations import perturbed
-from torch_models import NegativeBinomialDebug, torch_bpr_uncurried, deterministic_bpr
+from torch_models import NegativeBinomialRegressionModel, torch_bpr_uncurried, deterministic_bpr
 
 
 def convert_df_to_3d_array(df):
@@ -203,7 +203,7 @@ def main(K=None, step_size=None, epochs=None, bpr_weight=None,
     time_val = torch.tensor(val_time_arr, dtype=torch.float32).to(device)
 
     # Initialize model
-    model = NegativeBinomialDebug(
+    model = NegativeBinomialRegressionModel(
         num_locations=len(geoids),
         num_fixed_effects=train_X.shape[2], device=device
     ).to(device)
