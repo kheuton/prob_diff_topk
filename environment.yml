@@ -4,10 +4,7 @@ channels:
 dependencies:
   - pip
   - python[version='<3.12']
-  - ffmpeg
-  - ca-certificates
-  - openssl
-prefix: /cluster/tufts/hugheslab/kheuto01/mambaforge/envs/pip_k3
+prefix: mambaforge/envs/pip_k3
   - pip:
     - geopandas
     - ipython
