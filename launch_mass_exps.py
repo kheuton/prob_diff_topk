@@ -3,12 +3,12 @@ import subprocess
 import numpy as np
 
 # Hyperparameter configurations
-Ks = [100]  # Number of top locations to consider
+Ks = [50]  # Number of top locations to consider
 bpr_weights = [30]  # Weights for BPR loss term
 nll_weights = [1]  # Weights for negative log-likelihood term
 step_sizes =[0.001,0.01,0.0001]  # Learning rates
 perturbed_noises = [0.1,0.01,0.001]  # Noise levels for perturbation
-thresholds = [0.6, 0.65]  # BPR thresholds
+thresholds = [0.65,0.7,0.75,0.8]  # BPR thresholds
 score_sample_sizes = [100]  # Number of samples for score estimation
 pert_sample_sizes = [100]  # Number of samples for perturbation
 
@@ -16,12 +16,12 @@ pert_sample_sizes = [100]  # Number of samples for perturbation
 epochs = 8000
 seeds = [123]  # Multiple seeds for reproducibility
 code_dir = '/cluster/home/kheuto01/code/prob_diff_topk'
-data_dir = '/cluster/tufts/hugheslab/datasets/NSF_OD/cleaned/cook'
+data_dir = '//cluster/tufts/hugheslab/kheuto01/code/decision-aware-topk/data/aerial_surv'
 
 count = 0
 for K in Ks:
     # Create base directory for this K value
-    base_dir = f'/cluster/tufts/hugheslab/kheuto01/opioid_hpc_test_long_big/cook/'
+    base_dir = f'/cluster/tufts/hugheslab/kheuto01/new_init_bird/asurv/'
     
     for bpr_weight in bpr_weights:
         for nll_weight in nll_weights:
